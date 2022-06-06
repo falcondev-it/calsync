@@ -1,27 +1,49 @@
 import fastify from "fastify"
 import axios, { Axios } from "axios"
+import { config } from "dotenv"
+import calendar from "./calendar"
+config()
 
 const token = `Bearer ${process.env.ACCESS_TOKEN}`
-const authHeaders = { 'Authorization': token }
+export const authHeaders = { 'Authorization': token }
 
 const app = fastify({
   logger: true
 })
 
 app.all('/', (req, res) => {
-  console.log(req.body)
   res.code(200).send()
 })
 
 app.post('/notifications', async (req, res) => {
   console.log('getting last updated event')
 
-  const updatedDate = (new Date(((new Date()).getTime() - 10000))).toISOString()
-  console.log(updatedDate)
+  // get modified event
+  const updatedEvent = await calendar.getLastUpdated(process.env.CALENDAR_ID)
 
-  const { data } = await axios.get(`https://www.googleapis.com/calendar/v3/calendars/${process.env.CALENDAR_ID}/events?orderBy=updated&maxResults=10&updatedMin=${updatedDate}`, { headers: authHeaders })
+  const existing = await calendar.getEvent(process.env.TARGET_ID, updatedEvent.id)
 
-  const lastItem = data.items[data.items.length - 1]
+  if (existing) {
+    if (updatedEvent.status == 'cancelled')
+      calendar.deleteEvent(process.env.TARGET_ID, existing.id)
+
+    else
+      calendar.updateEvent(process.env.TARGET_ID, {
+        summary: updatedEvent.summary,
+        start: updatedEvent.start,
+        end: updatedEvent.end,
+        id: existing.id,
+        description: updatedEvent.id
+      })
+
+  } else {
+    calendar.createEvent(process.env.TARGET_ID, {
+      summary: updatedEvent.summary,
+      start: updatedEvent.start,
+      end: updatedEvent.end,
+      description: updatedEvent.id
+    })
+  }
 
   res.code(200).send()
 })
