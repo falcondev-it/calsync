@@ -2,6 +2,12 @@ import axios from "axios"
 import { authHeaders } from "."
 
 const BASE_URL = 'https://www.googleapis.com/calendar/v3/calendars/'
+// const apiClient = axios.create({
+//   baseURL: BASE_URL,
+//   headers: {
+//     'Authorization': `Bear`
+//   }
+// })
 
 export default {
   deleteEvent: async (calendarId: string, eventId: string) => {
@@ -38,6 +44,9 @@ export default {
     })
     const updatedEvent = data.items[data.items.length - 1]
     return updatedEvent as CalendarEvent
+  },
+  checkWebhook: async (calendarId: string) => {
+
   }
 }
 

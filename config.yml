@@ -1,0 +1,8 @@
+users:
+  julian:
+    syncs:
+      - source: julian.ullrich99@gmail.com
+        target: julian.ullrich@falcondev.de
+        private: true
+        color: '#E67C73'
+        text: 'Personal Commitment'
