@@ -8,14 +8,17 @@ users:
       - sourcecalendarid1@group.calendar.google.com
       - sourcecalendarid2@group.calendar.google.com
       target: targetcalendar_abc@group.calendar.google.com
+      eventSummary: Busy
     -
       sources:
       - sourcecalendarid3@group.calendar.google.com
       - sourcecalendarid4@group.calendar.google.com
       target: targetcalendar_xyz@group.calendar.google.com
+      eventSummary: Busy
   user2:
     -
       sources:
       - sourcecalendarid5@group.calendar.google.com
       - sourcecalendarid6@group.calendar.google.com
       target: targetcalendar_asd@group.calendar.google.com
+      eventSummary: Busy

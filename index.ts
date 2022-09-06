@@ -50,11 +50,14 @@ const getEvents = async (calendarId: string) => {
   }
 
   syncTokens[calendarId] = result.data.nextSyncToken
-  fs.writeFileSync('./syncTokenCache.json', JSON.stringify(syncTokens));
+  fs.writeFileSync('./syncTokenCache.json', JSON.stringify(syncTokens))
+  console.log(result.data.items)
   return result.data.items
 }
 
 const syncEvents = async () => {
+  // iterate over all users and sync all events
+
   for (const user in config.users) {
     for (const sync of config.users[user]) {
       for (const source of sync.sources) {
@@ -64,19 +67,49 @@ const syncEvents = async () => {
 
         // add events to target calendar
         for (const event of events) {
-          calendar.events.insert({
-            calendarId: sync.target,
-            requestBody: {
-              summary: 'Busy',
-              start: event.start,
-              end: event.end,
-              id: event.id, // TODO: already existing events don't need to be added
-            }
-          }, (error: any, _:any) => {
-            if (error.errors[0].reason !== 'duplicate') {
-              console.log(error)
-            }
-          })
+          if (event.status === 'confirmed') {
+            // insert new event
+
+            calendar.events.insert({
+              calendarId: sync.target,
+              requestBody: {
+                summary: sync.eventSummary,
+                start: event.start,
+                end: event.end,
+                id: event.id,
+              }
+            }, (error: any, _: any) => {
+              if (error) {
+                if (error.errors[0].reason === 'duplicate') {
+                  // event already exists
+                  // --> try to update event with update
+  
+                  calendar.events.update({
+                    calendarId: sync.target,
+                    eventId: event.id,
+                    requestBody: {
+                      summary: sync.eventSummary,
+                      start: event.start,
+                      end: event.end,
+                    }
+                  })  
+                } else {
+                  console.log(error)
+                }
+              }
+            })
+          } else if (event.status === 'cancelled') {
+            // delete event
+
+            calendar.events.delete({
+              calendarId: sync.target,
+              eventId: event.id,
+            }, (error: any, _: any) => {
+              if (error) {
+                console.log(error)
+              }
+            })
+          }
         }
       }
     }
@@ -96,7 +129,7 @@ const syncEvents = async () => {
     }, config.pollingInterval * 1000);
 
     await syncEvents()
-    
+
     app.listen({ port: 3000 })
   }
 )()

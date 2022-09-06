@@ -8,6 +8,7 @@ export type Config = {
 type UserConfig = {
   sources: Array<string>
   target: string
+  eventSummary: string
 }
 
 // export type SyncTokenCache = {
