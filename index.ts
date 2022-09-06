@@ -1,28 +1,42 @@
 import fastify from 'fastify'
 import { google } from 'googleapis'
-import dotenv from 'dotenv'
+import * as fs from 'fs'
+import * as yml from 'yaml'
+
+import { Config/*, SyncTokenCache */ } from './types'
+
+// TODO: make type-safe
 
 const SCOPES = 'https://www.googleapis.com/auth/calendar';
-const BASE_URL = 'https://www.googleapis.com/calendar/v3/calendars/';
 const GOOGLE_PRIVATE_KEY = './calsync-private-key.pem';
+const CONFIG_FILE = './config.yml';
+const SYNC_TOKENS_CACHE = './syncTokenCache.json';
 
-const POLLING_INTERVAL = 1000 * 60;
-let nextSyncToken: any = null; // TODO: load from db for specific calendar
+const configFile = fs.readFileSync(CONFIG_FILE, 'utf8')
+const config = yml.parse(configFile) as Config
 
-// TODO: make seperate jwtclient for source and target calendar
-dotenv.config()
-const jwtClient = new google.auth.JWT(process.env.GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY, undefined, SCOPES);
+const syncTokenCache = fs.readFileSync(SYNC_TOKENS_CACHE, 'utf8')
+const syncTokens = JSON.parse(syncTokenCache)
+
+// TODO: make separate jwtClient for source and target calendar
+const jwtClient = new google.auth.JWT(config.clientMail, GOOGLE_PRIVATE_KEY, undefined, SCOPES);
 const calendar = google.calendar({ version: 'v3', auth: jwtClient });
 
-const getEvents = async (calendarId: any) => {
+const getMinTime = () => {
+  const now = new Date()
+  now.setDate(now.getDate() - config.initialLastDaysToSync)
+  return now.toISOString()
+}
+
+const getEvents = async (calendarId: string) => {
   let result: any
 
-  if (nextSyncToken) {
+  if (syncTokens[calendarId]) {
     // nth request for this source calendar
-    console.log('polling with sync token', nextSyncToken)
+    console.log('polling with sync token', syncTokens[calendarId])
     result = await calendar.events.list({
       calendarId: calendarId,
-      syncToken: nextSyncToken,
+      syncToken: syncTokens[calendarId],
       maxResults: 10, // TODO: Pagination
     })
   } else {
@@ -31,60 +45,58 @@ const getEvents = async (calendarId: any) => {
     result = await calendar.events.list({
       calendarId: calendarId,
       maxResults: 10, // TODO: Pagination
-      timeMin: (new Date()).toISOString(),
+      timeMin: getMinTime(),
     })
   }
 
-  nextSyncToken = result.data.nextSyncToken
+  syncTokens[calendarId] = result.data.nextSyncToken
+  fs.writeFileSync('./syncTokenCache.json', JSON.stringify(syncTokens));
   return result.data.items
 }
 
 const syncEvents = async () => {
-  // get added events since last polling
-  const events = await getEvents(process.env.GOOGLE_SOURCE_CALENDAR_ID)
+  for (const user in config.users) {
+    for (const sync of config.users[user]) {
+      for (const source of sync.sources) {
 
-  // add events to target calendar
-  for (const event of events) {
-    calendar.events.insert({
-      calendarId: process.env.GOOGLE_TARGET_CALENDAR_ID,
-      requestBody: {
-        summary: 'Busy',
-        start: event.start,
-        end: event.end,
-        id: event.id, // TODO: already existing events dont't need to be added
+        // get added events since last polling
+        const events = await getEvents(source)
+
+        // add events to target calendar
+        for (const event of events) {
+          calendar.events.insert({
+            calendarId: sync.target,
+            requestBody: {
+              summary: 'Busy',
+              start: event.start,
+              end: event.end,
+              id: event.id, // TODO: already existing events don't need to be added
+            }
+          }, (error: any, _:any) => {
+            if (error.errors[0].reason !== 'duplicate') {
+              console.log(error)
+            }
+          })
+        }
       }
-    }, (error: any, _:any) => {
-      if (error) {
-        console.error(error)
-      }
-    })
+    }
   }
 }
 
 (
   //main
   async () => {
+    console.log("starting Calsync...")
+    console.log("Add the Calsync client mail to your source and target calendars as a guest:", config.clientMail)
+
     const app = fastify()
 
     setInterval(async () => {
       await syncEvents()
-    }, POLLING_INTERVAL);
+    }, config.pollingInterval * 1000);
 
     await syncEvents()
-
-    if (existing) {
-      if (updatedEvent.status == 'cancelled')
-        calendar.deleteEvent(process.env.TARGET_ID, existing.id)
-
-      else
-        calendar.updateEvent(process.env.TARGET_ID, {
-          summary: updatedEvent.summary,
-          start: updatedEvent.start,
-          end: updatedEvent.end,
-          id: existing.id,
-          description: updatedEvent.id
-        })
-
-    app.listen({ port: 3000 }, () => console.log('Listening on port 3000!'))
+    
+    app.listen({ port: 3000 })
   }
 )()

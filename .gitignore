@@ -1,4 +1,6 @@
 .env
+config.yml
+syncTokenCache.json
 calsync-private-key.pem
 TODO
 node_modules
