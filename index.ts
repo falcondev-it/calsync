@@ -1,70 +1,76 @@
-import fastify from "fastify"
-import dotenv from "dotenv"
-import calendar from "./calendar"
-import { initDB, getTokens, setTokens } from './credentialManager'
-import fs from "fs"
-import yml from "yaml"
-import type { Config, TokenRecord } from "./types"
-import { OAuth2Client } from "google-auth-library"
-import { exit } from "process"
+import fastify from 'fastify'
+import { google } from 'googleapis'
+import dotenv from 'dotenv'
 
-export const authHeaders = {}
+const SCOPES = 'https://www.googleapis.com/auth/calendar';
+const BASE_URL = 'https://www.googleapis.com/calendar/v3/calendars/';
+const GOOGLE_PRIVATE_KEY = './calsync-private-key.pem';
 
+const POLLING_INTERVAL = 1000 * 60;
+let nextSyncToken: any = null; // TODO: load from db for specific calendar
+
+// TODO: make seperate jwtclient for source and target calendar
 dotenv.config()
+const jwtClient = new google.auth.JWT(process.env.GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY, undefined, SCOPES);
+const calendar = google.calendar({ version: 'v3', auth: jwtClient });
 
-const configFile = fs.readFileSync('./config.yml', 'utf8')
-const config = yml.parse(configFile) as Config
+const getEvents = async (calendarId: any) => {
+  let result: any
 
-const apiClients = new Map<string, OAuth2Client>();
-
-(async () => {
-  console.log('opening db')
-  initDB()
-
-  console.log('creating oauth clients...')
-  for (let user in config.users) {
-    for (let syncConfig of config.users[user].syncs) {
-      const tokenName = syncConfig.authName ?? `${user}_default`
-      if (!apiClients.has(tokenName)) {
-        const client = new OAuth2Client()
-
-        client.on('tokens', (tokens) => setTokens(tokenName, tokens))
-
-        const initialTokens = await getTokens(tokenName)
-
-        client.setCredentials({ access_token: initialTokens.accessToken, refresh_token: initialTokens.refreshToken })
-      }
-    }
+  if (nextSyncToken) {
+    // nth request for this source calendar
+    console.log('polling with sync token', nextSyncToken)
+    result = await calendar.events.list({
+      calendarId: calendarId,
+      syncToken: nextSyncToken,
+      maxResults: 10, // TODO: Pagination
+    })
+  } else {
+    // first request for this source calendar
+    console.log('first polling')
+    result = await calendar.events.list({
+      calendarId: calendarId,
+      maxResults: 10, // TODO: Pagination
+      timeMin: (new Date()).toISOString(),
+    })
   }
 
+  nextSyncToken = result.data.nextSyncToken
+  return result.data.items
+}
 
-  if (1) exit()
+const syncEvents = async () => {
+  // get added events since last polling
+  const events = await getEvents(process.env.GOOGLE_SOURCE_CALENDAR_ID)
 
+  // add events to target calendar
+  for (const event of events) {
+    calendar.events.insert({
+      calendarId: process.env.GOOGLE_TARGET_CALENDAR_ID,
+      requestBody: {
+        summary: 'Busy',
+        start: event.start,
+        end: event.end,
+        id: event.id, // TODO: already existing events dont't need to be added
+      }
+    }, (error: any, _:any) => {
+      if (error) {
+        console.error(error)
+      }
+    })
+  }
+}
 
-  // console.log('checking if all webhooks are installed...')
-  // for (let user in config.users) {
-  //   for (let syncConfig of config.users[user].syncs) {
-  //     const tokenName = syncConfig.authName ?? `${user}_default`
-  //     if (!tokens.has(tokenName)) tokens.set(tokenName, await getTokens(tokenName))
+(
+  //main
+  async () => {
+    const app = fastify()
 
-  //   }
-  // }
+    setInterval(async () => {
+      await syncEvents()
+    }, POLLING_INTERVAL);
 
-  const app = fastify({
-    // logger: true
-  })
-
-  app.all('/', (req, res) => {
-    res.code(200).send()
-  })
-
-  app.post('/notifications', async (req, res) => {
-    console.log('getting last updated event')
-
-    // get modified event
-    const updatedEvent = await calendar.getLastUpdated(process.env.CALENDAR_ID)
-
-    const existing = await calendar.getEvent(process.env.TARGET_ID, updatedEvent.id)
+    await syncEvents()
 
     if (existing) {
       if (updatedEvent.status == 'cancelled')
@@ -79,18 +85,6 @@ const apiClients = new Map<string, OAuth2Client>();
           description: updatedEvent.id
         })
 
-    } else {
-      calendar.createEvent(process.env.TARGET_ID, {
-        summary: updatedEvent.summary,
-        start: updatedEvent.start,
-        end: updatedEvent.end,
-        description: updatedEvent.id
-      })
-    }
-
-    res.code(200).send()
-  })
-
-
-  app.listen(3000)
-})()
+    app.listen({ port: 3000 }, () => console.log('Listening on port 3000!'))
+  }
+)()
