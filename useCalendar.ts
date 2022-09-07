@@ -1,13 +1,10 @@
 import { google } from 'googleapis'
 import { useConfig } from './useConfig'
 import { useSyncs } from './useSyncs'
+import { GOOGLE_PRIVATE_KEY, SCOPES, CALENDAR_CACHE_FILE } from './globals'
 import { v4 as uuidv4 } from 'uuid'
 import * as fs from 'fs'
 import { SyncConfig } from './types';
-
-const SCOPES = 'https://www.googleapis.com/auth/calendar';
-const GOOGLE_PRIVATE_KEY = './calsync-private-key.pem';
-const CALENDAR_CACHE_FILE = './calendarCache.json';
 
 
 const config = useConfig()

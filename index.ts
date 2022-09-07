@@ -5,10 +5,9 @@ import * as cron from 'node-cron'
 import { useSyncs } from './useSyncs'
 import { useCalendar } from './useCalendar'
 import { useConfig } from './useConfig'
+import { CALENDAR_CACHE_FILE } from './globals'
 
 // TODO: make type-safe
-
-const CALENDAR_CACHE_FILE = './calendarCache.json';
 
 const { sources } = useSyncs()
 const { registerWebhook, handleWebhook, checkExpirationDates } = useCalendar()
@@ -22,9 +21,9 @@ const calendarCache = JSON.parse(calendarCacheFile)
 const installCalendars = async () => {
   for (const source of sources) {
     if (!calendarCache[source]) {
-        const { channel, expirationDate } = await registerWebhook(source)
-        calendarCache[source].channel = channel
-        calendarCache[source].expirationDate = expirationDate
+      const { channel, expirationDate } = await registerWebhook(source)
+      calendarCache[source].channel = channel
+      calendarCache[source].expirationDate = expirationDate
     }
   }
 
