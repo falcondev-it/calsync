@@ -1,4 +1,4 @@
-const CONFIG_PATH = '../config'
+const CONFIG_PATH = './config'
 
 export const SCOPES = 'https://www.googleapis.com/auth/calendar'
 export const GOOGLE_PRIVATE_KEY = `${CONFIG_PATH}/calsync-private-key.pem`
