@@ -17,7 +17,7 @@ const jwtClient = new google.auth.JWT(config.clientMail, GOOGLE_PRIVATE_KEY, und
 const calendar = google.calendar({ version: 'v3', auth: jwtClient })
 
 const calendarCacheFile = fs.readFileSync(CALENDAR_CACHE_FILE, 'utf8')
-const calendarCache = JSON.parse(calendarCacheFile)
+let calendarCache = JSON.parse(calendarCacheFile)
 
 
 export const useCalendar = () => {
@@ -43,7 +43,6 @@ export const useCalendar = () => {
   const handleWebhook = async (response: any) => {
     // extract channel uuid from notification
     const channelId = response.headers['x-goog-channel-id']
-    console.log(channelId)
 
     // find corresponding source calendar
     const source = Object.keys(calendarCache).find(
@@ -144,13 +143,29 @@ export const useCalendar = () => {
       })
     }
 
-    console.log(result.data)
     calendarCache[calendarId].nextSyncToken = result.data.nextSyncToken
     fs.writeFileSync(CALENDAR_CACHE_FILE, JSON.stringify(calendarCache))
-    console.log(result.data.items)
     return result.data.items
   }
 
 
-  return { registerWebhook, handleWebhook }
+  const checkExpirationDates = async () => {
+    calendarCache = JSON.parse(calendarCacheFile)
+    for (const key of Object.keys(calendarCache)) {
+      const expirationDate = new Date(calendarCache[key].expirationDate)
+      const hoursLeft = (expirationDate.getTime() - new Date().getTime()) / (1000 * 60 * 60)
+      console.log('hours left for', key, hoursLeft)
+
+      if (hoursLeft < 24) {
+        // renew webhook
+        const { channel, expirationDate } = await registerWebhook(key)
+        calendarCache[key].channel = channel
+        calendarCache[key].expirationDate = expirationDate
+        fs.writeFileSync(CALENDAR_CACHE_FILE, JSON.stringify(calendarCache))
+      }
+    }
+  }
+
+
+  return { registerWebhook, handleWebhook, checkExpirationDates }
 }

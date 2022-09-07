@@ -1,5 +1,6 @@
 import fastify from 'fastify'
 import * as fs from 'fs'
+import * as cron from 'node-cron'
 
 import { useSyncs } from './useSyncs'
 import { useCalendar } from './useCalendar'
@@ -10,7 +11,7 @@ import { useConfig } from './useConfig'
 const CALENDAR_CACHE_FILE = './calendarCache.json';
 
 const { sources } = useSyncs()
-const { registerWebhook, handleWebhook } = useCalendar()
+const { registerWebhook, handleWebhook, checkExpirationDates } = useCalendar()
 const config = useConfig()
 
 
@@ -21,7 +22,9 @@ const calendarCache = JSON.parse(calendarCacheFile)
 const installCalendars = async () => {
   for (const source of sources) {
     if (!calendarCache[source]) {
-      calendarCache[source] = await registerWebhook(source)
+        const { channel, expirationDate } = await registerWebhook(source)
+        calendarCache[source].channel = channel
+        calendarCache[source].expirationDate = expirationDate
     }
   }
 
@@ -44,5 +47,7 @@ const installCalendars = async () => {
     app.listen({ port: config.port })
 
     installCalendars()
+
+    cron.schedule('0 2 * * *', checkExpirationDates)
   }
 )()
