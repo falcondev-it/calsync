@@ -1,11 +1,12 @@
 export type Config = {
-  clientMail: string;
+  clientMail: string
+  receiverWebhookURL: string
+  port: number
   initialLastDaysToSync: number
-  pollingInterval: number
-  users: Record<string, Array<UserConfig>>
+  users: Record<string, Array<SyncConfig>>
 }
 
-type UserConfig = {
+export type SyncConfig = {
   sources: Array<string>
   target: string
   eventSummary: string

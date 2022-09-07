@@ -1,6 +1,7 @@
 clientMail: calsync@xyz.gserviceaccount.com
+receiverWebhookURL: https://receiver.webhook.com
+port: 3000
 initialLastDaysToSync: 7 # days
-pollingInterval: 60 # seconds
 users:
   user1:
     -
