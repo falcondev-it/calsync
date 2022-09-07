@@ -2,10 +2,10 @@
   "name": "calsync",
   "version": "1.0.0",
   "description": "",
-  "main": "index.ts",
+  "main": "src/index.ts",
   "scripts": {
-    "start": "ts-node index.ts",
-    "dev": "ts-node-dev index.ts",
+    "start": "ts-node src/index.ts",
+    "dev": "ts-node-dev src/index.ts",
     "lint": "eslint . --ext .ts"
   },
   "author": "",
