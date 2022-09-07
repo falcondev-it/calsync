@@ -3,10 +3,9 @@ import { useConfig } from './useConfig'
 
 const config = useConfig()
 
-
 export const useSyncs = () => {
-  let syncs: Array<SyncConfig> = []
-  let sources: Array<string> = []
+  const syncs: Array<SyncConfig> = []
+  const sources: Array<string> = []
 
   for (const user in config.users) {
     for (const sync of config.users[user]) {

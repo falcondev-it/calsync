@@ -13,10 +13,8 @@ const { sources } = useSyncs()
 const { registerWebhook, handleWebhook, checkExpirationDates } = useCalendar()
 const config = useConfig()
 
-
 const calendarCacheFile = fs.readFileSync(CALENDAR_CACHE_FILE, 'utf8')
 const calendarCache = JSON.parse(calendarCacheFile)
-
 
 const installCalendars = async () => {
   for (const source of sources) {
@@ -28,25 +26,25 @@ const installCalendars = async () => {
   }
 
   fs.writeFileSync(CALENDAR_CACHE_FILE, JSON.stringify(calendarCache))
-}
+} //main
 
-(
-  //main
-  async () => {
-    console.log("starting Calsync...")
-    console.log("Add the Calsync client mail to your source and target calendars as a guest:", config.clientMail)
+;(async () => {
+  console.log('starting Calsync...')
+  console.log(
+    'Add the Calsync client mail to your source and target calendars as a guest:',
+    config.clientMail
+  )
 
-    const app = fastify()
+  const app = fastify({ logger: true })
 
-    app.addHook("onRequest", (request, _, done) => {
-      handleWebhook(request)
-      done()
-    })
+  app.addHook('onRequest', (request, _, done) => {
+    handleWebhook(request)
+    done()
+  })
 
-    app.listen({ port: config.port })
+  app.listen({ port: config.port })
 
-    installCalendars()
+  installCalendars()
 
-    cron.schedule('0 2 * * *', checkExpirationDates)
-  }
-)()
+  cron.schedule('0 2 * * *', checkExpirationDates)
+})()

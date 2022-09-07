@@ -1,21 +1,20 @@
 import { google } from 'googleapis'
-import { useConfig } from './useConfig'
-import { useSyncs } from './useSyncs'
-import { GOOGLE_PRIVATE_KEY, SCOPES, CALENDAR_CACHE_FILE } from './globals'
 import { v4 as uuidv4 } from 'uuid'
 import * as fs from 'fs'
-import { SyncConfig } from './types';
 
+import { useConfig } from './useConfig'
+import { useSyncs } from './useSyncs'
+import { SyncConfig } from './types'
+import { GOOGLE_PRIVATE_KEY, SCOPES, CALENDAR_CACHE_FILE } from './globals'
 
 const config = useConfig()
-const { syncs } = useSyncs() 
+const { syncs } = useSyncs()
 
 const jwtClient = new google.auth.JWT(config.clientMail, GOOGLE_PRIVATE_KEY, undefined, SCOPES)
 const calendar = google.calendar({ version: 'v3', auth: jwtClient })
 
 const calendarCacheFile = fs.readFileSync(CALENDAR_CACHE_FILE, 'utf8')
 let calendarCache = JSON.parse(calendarCacheFile)
-
 
 export const useCalendar = () => {
   // TODO: error handling
@@ -27,7 +26,7 @@ export const useCalendar = () => {
         id: uuidv4(),
         type: 'web_hook',
         address: config.receiverWebhookURL,
-      }
+      },
     })
 
     return {
@@ -36,14 +35,13 @@ export const useCalendar = () => {
     }
   }
 
-
   const handleWebhook = async (response: any) => {
     // extract channel uuid from notification
     const channelId = response.headers['x-goog-channel-id']
 
     // find corresponding source calendar
     const source = Object.keys(calendarCache).find(
-      calendarId => calendarCache[calendarId].channel === channelId
+      (calendarId) => calendarCache[calendarId].channel === channelId
     )
 
     // find syncConfig for source calendar
@@ -56,10 +54,9 @@ export const useCalendar = () => {
     }
   }
 
-
   const syncEvents = async (sync: SyncConfig, source: string | undefined) => {
-    const sources = (source) ? [source] : sync.sources
-    
+    const sources = source ? [source] : sync.sources
+
     for (const src of sources) {
       // get added events since last sync
       const events = await getEvents(src)
@@ -69,57 +66,61 @@ export const useCalendar = () => {
         if (event.status === 'confirmed') {
           // insert new event
 
-          calendar.events.insert({
-            calendarId: sync.target,
-            requestBody: {
-              summary: sync.eventSummary,
-              start: event.start,
-              end: event.end,
-              id: event.id,
-            }
-          }, (error: any, _: any) => {
-            if (error) {
-              if (error.errors[0].reason === 'duplicate') {
-                // event already exists
-                // --> try to update event with update
+          calendar.events.insert(
+            {
+              calendarId: sync.target,
+              requestBody: {
+                summary: sync.eventSummary,
+                start: event.start,
+                end: event.end,
+                id: event.id,
+              },
+            },
+            (error: any, _: any) => {
+              if (error) {
+                if (error.errors[0].reason === 'duplicate') {
+                  // event already exists
+                  // --> try to update event with update
 
-                calendar.events.update({
-                  calendarId: sync.target,
-                  eventId: event.id,
-                  requestBody: {
-                    summary: sync.eventSummary,
-                    start: event.start,
-                    end: event.end,
-                  }
-                })  
-              } else {
-                console.log(error)
+                  calendar.events.update({
+                    calendarId: sync.target,
+                    eventId: event.id,
+                    requestBody: {
+                      summary: sync.eventSummary,
+                      start: event.start,
+                      end: event.end,
+                    },
+                  })
+                } else {
+                  console.log(error)
+                }
               }
             }
-          })
+          )
         } else if (event.status === 'cancelled') {
           // delete event
 
-          calendar.events.delete({
-            calendarId: sync.target,
-            eventId: event.id,
-          }, (error: any, _: any) => {
-            if (error) {
-              console.log(error)
+          calendar.events.delete(
+            {
+              calendarId: sync.target,
+              eventId: event.id,
+            },
+            (error: any, _: any) => {
+              if (error) {
+                console.log(error)
+              }
             }
-          })
+          )
         }
       }
     }
   }
-
 
   const getMinTime = () => {
     const now = new Date()
     now.setDate(now.getDate() - config.initialLastDaysToSync)
     return now.toISOString()
   }
-
 
   const getEvents = async (calendarId: string) => {
     let result: any
@@ -145,7 +146,6 @@ export const useCalendar = () => {
     return result.data.items
   }
 
-
   const checkExpirationDates = async () => {
     calendarCache = JSON.parse(calendarCacheFile)
     for (const key of Object.keys(calendarCache)) {
@@ -162,7 +162,6 @@ export const useCalendar = () => {
       }
     }
   }
-
 
   return { registerWebhook, handleWebhook, checkExpirationDates }
 }
