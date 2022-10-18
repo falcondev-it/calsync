@@ -70,51 +70,66 @@ export const useCalendar = () => {
 
       // add events to target calendar
       for (const event of events) {
-        // console.log(event)
-
         if (event.status === 'confirmed') {
           // insert new event
 
-          calendar.events.insert(
-            {
+          if (event.recurringEventId) {
+            calendar.events.update({
               calendarId: sync.target,
+              eventId: event.id,
               requestBody: {
                 summary: sync.eventSummary,
                 start: event.start,
                 end: event.end,
-                id: event.id,
-                // recurrence: event.recurrence,
+                recurrence: event.recurrence,
+                recurringEventId: event.recurringEventId,
               },
-            },
-            (error: any, _: any) => {
-              if (error) {
-                if (error.errors[0].reason === 'duplicate') {
-                  // event already exists
-                  // --> try to update event
-
-                  calendar.events.update({
-                    calendarId: sync.target,
-                    eventId: event.id,
-                    requestBody: {
-                      summary: sync.eventSummary,
-                      start: event.start,
-                      end: event.end,
-                      // recurrence: event.recurrence,
-                    },
-                  }, (error: any, _: any) => {
-                    if (!error) {
-                      console.log(chalk.yellow('updated event') + ' @ ' + chalk.gray(src + ' -> ' + sync.target))
-                    }
-                  })
-                } else {
-                  console.log(error)
-                }
-              } else {
-                console.log(chalk.green('inserted event') + ' @ ' + chalk.gray(src + ' -> ' + sync.target))
+            }, (error: any, _: any) => {
+              if (!error) {
+                console.log(chalk.green('created instance') + ' @ ' + chalk.gray(src + ' -> ' + sync.target))
               }
-            }
-          )
+            })
+          } else {
+            calendar.events.insert({
+                calendarId: sync.target,
+                requestBody: {
+                  summary: sync.eventSummary,
+                  start: event.start,
+                  end: event.end,
+                  id: event.id,
+                  recurrence: event.recurrence,
+                },
+              },
+              (error: any, _: any) => {
+                if (error) {
+                  if (error.errors[0].reason === 'duplicate') {
+                    // event already exists
+                    // --> try to update event
 
+                    calendar.events.update({
+                      calendarId: sync.target,
+                      eventId: event.id,
+                      requestBody: {
+                        summary: sync.eventSummary,
+                        start: event.start,
+                        end: event.end,
+                        recurrence: event.recurrence,
+                        recurringEventId: event.recurringEventId,
+                      },
+                    }, (error: any, _: any) => {
+                      if (!error) {
+                        console.log(chalk.yellow('updated event') + ' @ ' + chalk.gray(src + ' -> ' + sync.target))
+                      }
+                    })
+                  } else {
+                    console.log(error)
+                  }
+                } else {
+                  console.log(chalk.green('created event') + ' @ ' + chalk.gray(src + ' -> ' + sync.target))
+                }
+              }
+            )
+          }
         } else if (event.status === 'cancelled') {
           // delete event
 
@@ -145,7 +160,7 @@ export const useCalendar = () => {
   const getEvents = async (calendarId: string) => {
     let result: any
 
-    if (calendarCache[calendarId].nextSyncToken) {
+    if (calendarCache[calendarId].nextSyncToken !== undefined) {
       // nth request for this source calendar
       result = await calendar.events.list({
         calendarId: calendarId,
