@@ -12,6 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "axios": "^0.27.2",
+    "chalk": ">=4 <5",
     "fastify": "^4.9.1",
     "googleapis": "^107.0.0",
     "node-cron": "^3.0.2",

@@ -1,25 +1,26 @@
 import { google } from 'googleapis'
 import { v4 as uuidv4 } from 'uuid'
 import * as fs from 'fs'
+import * as chalk from 'chalk'
 
 import { useConfig } from './useConfig'
-import { useSyncs } from './useSyncs'
 import { SyncConfig } from './types'
 import { GOOGLE_PRIVATE_KEY, SCOPES, CALENDAR_CACHE_FILE } from './globals'
 
-const config = useConfig()
-const { syncs } = useSyncs()
+const { config, syncs } = useConfig()
 
-const jwtClient = new google.auth.JWT(config.clientMail, GOOGLE_PRIVATE_KEY, undefined, SCOPES)
-const calendar = google.calendar({ version: 'v3', auth: jwtClient })
+const calendar = google.calendar({
+  version: 'v3',
+  auth: new google.auth.JWT(config.clientMail, GOOGLE_PRIVATE_KEY, undefined, SCOPES),
+})
 
 const calendarCacheFile = fs.readFileSync(CALENDAR_CACHE_FILE, 'utf8')
 let calendarCache = JSON.parse(calendarCacheFile)
+let isReady = false
 
 export const useCalendar = () => {
   // TODO: error handling
   const registerWebhook = async (calendarId: string) => {
-    console.log('registering webhook for calendar', calendarId)
     const result: any = await calendar.events.watch({
       calendarId: calendarId,
       requestBody: {
@@ -35,11 +36,18 @@ export const useCalendar = () => {
     }
   }
 
+  const setReady = (mode: boolean) => {
+    isReady = mode
+  }
+
   const handleWebhook = async (response: any) => {
+    if (!isReady) return
+
     // extract channel uuid from notification
     const channelId = response.headers['x-goog-channel-id']
 
     // find corresponding source calendar
+    calendarCache = JSON.parse(fs.readFileSync(CALENDAR_CACHE_FILE, 'utf8'))
     const source = Object.keys(calendarCache).find(
       (calendarId) => calendarCache[calendarId].channel === channelId
     )
@@ -48,13 +56,12 @@ export const useCalendar = () => {
     for (const sync of syncs) {
       if (sync.sources.includes(source)) {
         // sync events
-        console.log(source)
         await syncEvents(sync, source)
       }
     }
   }
 
-  const syncEvents = async (sync: SyncConfig, source: string | undefined) => {
+  const syncEvents = async (sync: SyncConfig, source: string | undefined = undefined) => {
     const sources = source ? [source] : sync.sources
 
     for (const src of sources) {
@@ -63,6 +70,8 @@ export const useCalendar = () => {
 
       // add events to target calendar
       for (const event of events) {
+        // console.log(event)
+
         if (event.status === 'confirmed') {
           // insert new event
 
@@ -74,13 +83,14 @@ export const useCalendar = () => {
                 start: event.start,
                 end: event.end,
                 id: event.id,
+                // recurrence: event.recurrence,
               },
             },
             (error: any, _: any) => {
               if (error) {
                 if (error.errors[0].reason === 'duplicate') {
                   // event already exists
-                  // --> try to update event with update
+                  // --> try to update event
 
                   calendar.events.update({
                     calendarId: sync.target,
@@ -89,14 +99,22 @@ export const useCalendar = () => {
                       summary: sync.eventSummary,
                       start: event.start,
                       end: event.end,
+                      // recurrence: event.recurrence,
                     },
+                  }, (error: any, _: any) => {
+                    if (!error) {
+                      console.log(chalk.yellow('updated event') + ' @ ' + chalk.gray(src + ' -> ' + sync.target))
+                    }
                   })
                 } else {
                   console.log(error)
                 }
+              } else {
+                console.log(chalk.green('inserted event') + ' @ ' + chalk.gray(src + ' -> ' + sync.target))
               }
             }
           )
+
         } else if (event.status === 'cancelled') {
           // delete event
 
@@ -108,6 +126,8 @@ export const useCalendar = () => {
             (error: any, _: any) => {
               if (error) {
                 console.log(error)
+              } else {
+                console.log(chalk.red('deleted event') + ' @ ' + chalk.gray(src + ' -> ' + sync.target))
               }
             }
           )
@@ -118,7 +138,7 @@ export const useCalendar = () => {
 
   const getMinTime = () => {
     const now = new Date()
-    now.setDate(now.getDate() - config.initialLastDaysToSync)
+    now.setDate(now.getDate())
     return now.toISOString()
   }
 
@@ -127,7 +147,6 @@ export const useCalendar = () => {
 
     if (calendarCache[calendarId].nextSyncToken) {
       // nth request for this source calendar
-      console.log('polling with sync token', calendarCache[calendarId].nextSyncToken)
       result = await calendar.events.list({
         calendarId: calendarId,
         syncToken: calendarCache[calendarId].nextSyncToken,
@@ -146,15 +165,19 @@ export const useCalendar = () => {
     return result.data.items
   }
 
+  const isOutdated = (source: any) => {
+    const expirationDate = new Date(source.expirationDate)
+    const hoursLeft = (expirationDate.getTime() - new Date().getTime()) / (1000 * 60 * 60)
+
+    return hoursLeft < 24
+  }
+
   const checkExpirationDates = async () => {
     calendarCache = JSON.parse(calendarCacheFile)
     for (const key of Object.keys(calendarCache)) {
-      const expirationDate = new Date(calendarCache[key].expirationDate)
-      const hoursLeft = (expirationDate.getTime() - new Date().getTime()) / (1000 * 60 * 60)
-      console.log('hours left for', key, hoursLeft)
 
-      if (hoursLeft < 24) {
-        // renew webhook
+      if (isOutdated(calendarCache[key])) {
+        // update webhook
         const { channel, expirationDate } = await registerWebhook(key)
         calendarCache[key].channel = channel
         calendarCache[key].expirationDate = expirationDate
@@ -163,5 +186,5 @@ export const useCalendar = () => {
     }
   }
 
-  return { registerWebhook, handleWebhook, checkExpirationDates }
+  return { registerWebhook, handleWebhook, syncEvents, checkExpirationDates, isOutdated, setReady }
 }
