@@ -5,7 +5,7 @@
   "main": "src/index.ts",
   "scripts": {
     "start": "ts-node src/index.ts",
-    "dev": "ts-node-dev src/index.ts",
+    "dev": "esr src/index.ts",
     "lint": "eslint . --ext .ts"
   },
   "author": "",
@@ -27,6 +27,8 @@
     "@types/uuid": "^8.3.4",
     "@typescript-eslint/eslint-plugin": "^5.40.1",
     "@typescript-eslint/parser": "^5.40.1",
+    "esbuild": "^0.15.11",
+    "esbuild-runner": "^2.2.2",
     "eslint": "^8.25.0",
     "eslint-config-prettier": "^8.5.0",
     "eslint-plugin-prettier": "^4.2.1",
