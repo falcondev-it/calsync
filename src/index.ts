@@ -7,10 +7,8 @@ import { useCalendar } from './useCalendar'
 import { useConfig } from './useConfig'
 import { CALENDAR_CACHE_FILE } from './globals'
 
-// TODO: make type-safe
-
 const { registerWebhook, handleWebhook, syncEvents, checkExpirationDates, isOutdated, setReady } = useCalendar()
-const { syncs, sources, users, config } = useConfig()
+const { sources, users, config } = useConfig()
 
 const calendarCache = JSON.parse(fs.readFileSync(CALENDAR_CACHE_FILE, 'utf8'))
 const app = fastify()

@@ -1,11 +1,13 @@
-import { google } from 'googleapis'
+import { calendar_v3, google } from 'googleapis'
 import { v4 as uuidv4 } from 'uuid'
 import * as fs from 'fs'
 import * as chalk from 'chalk'
 
 import { useConfig } from './useConfig'
-import { SyncConfig } from './types'
+import { CalendarCacheEntry, CustomApiCall, DefaultApiCall, SyncConfig } from './types'
 import { GOOGLE_PRIVATE_KEY, SCOPES, CALENDAR_CACHE_FILE } from './globals'
+import { FastifyRequest } from 'fastify'
+import { GaxiosResponse } from 'gaxios'
 
 const { config, syncs } = useConfig()
 
@@ -19,9 +21,59 @@ let calendarCache = JSON.parse(calendarCacheFile)
 let isReady = false
 
 export const useCalendar = () => {
+  // api
+  const updateInstance: CustomApiCall = (sync, event, callback) => {
+    calendar.events.update({
+      calendarId: sync.target,
+      eventId: event.id,
+      requestBody: {
+        summary: sync.eventSummary,
+        start: event.start,
+        end: event.end,
+        recurrence: event.recurrence,
+        recurringEventId: event.recurringEventId,
+      },
+    }, callback)
+  }
+
+  const insertEvent: CustomApiCall = (sync, event, callback) => {
+    calendar.events.insert({
+      calendarId: sync.target,
+      requestBody: {
+        summary: sync.eventSummary,
+        start: event.start,
+        end: event.end,
+        id: event.id,
+        recurrence: event.recurrence,
+      },
+    }, callback)
+  }
+
+  const updateEvent: CustomApiCall = (sync, event, callback) => {
+    calendar.events.update({
+      calendarId: sync.target,
+      eventId: event.id,
+      requestBody: {
+        summary: sync.eventSummary,
+        start: event.start,
+        end: event.end,
+        recurrence: event.recurrence,
+        recurringEventId: event.recurringEventId,
+      },
+    }, callback)
+  }
+
+  const deleteEvent: DefaultApiCall = (sync, event, callback) => {
+    calendar.events.delete({
+      calendarId: sync.target,
+      eventId: event.id,
+    }, callback)
+  }
+
+
   // TODO: error handling
   const registerWebhook = async (calendarId: string) => {
-    const result: any = await calendar.events.watch({
+    const result = await calendar.events.watch({
       calendarId: calendarId,
       requestBody: {
         id: uuidv4(),
@@ -40,7 +92,7 @@ export const useCalendar = () => {
     isReady = mode
   }
 
-  const handleWebhook = async (response: any) => {
+  const handleWebhook = async (response: FastifyRequest) => {
     if (!isReady) return
 
     // extract channel uuid from notification
@@ -74,78 +126,42 @@ export const useCalendar = () => {
           // insert new event
 
           if (event.recurringEventId) {
-            calendar.events.update({
-              calendarId: sync.target,
-              eventId: event.id,
-              requestBody: {
-                summary: sync.eventSummary,
-                start: event.start,
-                end: event.end,
-                recurrence: event.recurrence,
-                recurringEventId: event.recurringEventId,
-              },
-            }, (error: any, _: any) => {
+            updateInstance(sync, event, (error, _) => {
               if (!error) {
                 console.log(chalk.green('created instance') + ' @ ' + chalk.gray(src + ' -> ' + sync.target))
               }
             })
-          } else {
-            calendar.events.insert({
-                calendarId: sync.target,
-                requestBody: {
-                  summary: sync.eventSummary,
-                  start: event.start,
-                  end: event.end,
-                  id: event.id,
-                  recurrence: event.recurrence,
-                },
-              },
-              (error: any, _: any) => {
-                if (error) {
-                  if (error.errors[0].reason === 'duplicate') {
-                    // event already exists
-                    // --> try to update event
-
-                    calendar.events.update({
-                      calendarId: sync.target,
-                      eventId: event.id,
-                      requestBody: {
-                        summary: sync.eventSummary,
-                        start: event.start,
-                        end: event.end,
-                        recurrence: event.recurrence,
-                        recurringEventId: event.recurringEventId,
-                      },
-                    }, (error: any, _: any) => {
-                      if (!error) {
-                        console.log(chalk.yellow('updated event') + ' @ ' + chalk.gray(src + ' -> ' + sync.target))
-                      }
-                    })
-                  } else {
-                    console.log(error)
-                  }
-                } else {
-                  console.log(chalk.green('created event') + ' @ ' + chalk.gray(src + ' -> ' + sync.target))
-                }
-              }
-            )
+            return
           }
+
+          insertEvent(sync, event, (error, _) => {
+            console.log(JSON.stringify(error))
+            if (error && error.response.data) {
+              if (error.response.data.error.errors[0].reason === 'duplicate') {
+                // event already exists --> try to update event
+
+                updateEvent(sync, event, (error, _) => {
+                  if (!error) {
+                    console.log(chalk.yellow('updated event') + ' @ ' + chalk.gray(src + ' -> ' + sync.target))
+                  }
+                })
+              } else { console.log(error) }
+            } else {
+              console.log(chalk.green('created event') + ' @ ' + chalk.gray(src + ' -> ' + sync.target))
+            }
+          })
+          return
+
         } else if (event.status === 'cancelled') {
           // delete event
 
-          calendar.events.delete(
-            {
-              calendarId: sync.target,
-              eventId: event.id,
-            },
-            (error: any, _: any) => {
-              if (error) {
-                console.log(error)
-              } else {
-                console.log(chalk.red('deleted event') + ' @ ' + chalk.gray(src + ' -> ' + sync.target))
-              }
+          deleteEvent(sync, event, (error, _) => {
+            if (error) {
+              console.log(error)
+            } else {
+              console.log(chalk.red('deleted event') + ' @ ' + chalk.gray(src + ' -> ' + sync.target))
             }
-          )
+          })
         }
       }
     }
@@ -158,7 +174,7 @@ export const useCalendar = () => {
   }
 
   const getEvents = async (calendarId: string) => {
-    let result: any
+    let result: GaxiosResponse<calendar_v3.Schema$Events>
 
     if (calendarCache[calendarId].nextSyncToken !== undefined) {
       // nth request for this source calendar
@@ -180,7 +196,7 @@ export const useCalendar = () => {
     return result.data.items
   }
 
-  const isOutdated = (source: any) => {
+  const isOutdated = (source: CalendarCacheEntry) => {
     const expirationDate = new Date(source.expirationDate)
     const hoursLeft = (expirationDate.getTime() - new Date().getTime()) / (1000 * 60 * 60)
 
