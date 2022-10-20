@@ -217,7 +217,7 @@ export const useCalendar = () => {
         timeMin: getMinTime(),
       })
 
-      console.log(chalk.yellow('✨ first response') + ' from calendar ' + chalk.gray(calendarId))
+      console.log(chalk.yellow('✨ got response') + ' from calendar ' + chalk.gray(calendarId))
     }
 
     cache[calendarId].nextSyncToken = result.data.nextSyncToken
@@ -233,17 +233,20 @@ export const useCalendar = () => {
   }
 
   const checkExpirationDates = async () => {
-    let cache = loadCache()
-    for (const key of Object.keys(cache)) {
+    await handleJob('checking expiration dates', async () => {
+      let cache = loadCache()
+      for (const key of Object.keys(cache)) {
 
-      if (isOutdated(cache[key])) {
-        // update webhook
-        const { channel, expirationDate } = await registerWebhook(key)
-        cache[key].channel = channel
-        cache[key].expirationDate = expirationDate
-        saveCache(cache)
+        if (isOutdated(cache[key])) {
+          // update webhook
+          const { channel, expirationDate } = await registerWebhook(key)
+          cache[key].channel = channel
+          cache[key].expirationDate = expirationDate
+          saveCache(cache)
+          console.log('updated webhook for calendar ' + chalk.gray(key))
+        }
       }
-    }
+    })
   }
 
   return { registerWebhook, getEvents, fetchAllEvents, fetchEventsFromSync, fetchEventsFromSource, syncEvent, checkExpirationDates, isOutdated }

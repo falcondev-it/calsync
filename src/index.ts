@@ -84,7 +84,7 @@ const worker = new Worker(queueName, async (job) => {
   })
 
   await handleJob('starting scheduler', async () => {
-    cron.schedule('0 15 * * *', checkExpirationDates) // every day at 2am
+    cron.schedule('0 2 * * *', checkExpirationDates) // every day at 2am
     cron.schedule('*/10 * * * *', fetchAllEvents) // every 10 minutes
   })
 
