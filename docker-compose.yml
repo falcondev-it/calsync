@@ -12,3 +12,14 @@ services:
       - REDIS_HOSTS=local:redis:6379
     ports:
       - "8081:8081"
+
+  calsync:
+    network_mode: host
+    depends_on:
+      - redis
+    container_name: calsync
+    image: calsync
+    ports:
+      - 3000:3000
+    volumes:
+      - ./cache:/app/cache
