@@ -5,6 +5,8 @@ services:
     container_name: redis
     ports:
       - 6379:6379
+    depends_on:
+      - redis-commander
   redis-commander:
     container_name: redis-commander
     image: rediscommander/redis-commander:latest
@@ -12,3 +14,14 @@ services:
       - REDIS_HOSTS=local:redis:6379
     ports:
       - "8081:8081"
+
+  calsync:
+    network_mode: host
+    depends_on:
+      - redis
+    container_name: calsync
+    image: calsync
+    ports:
+      - 3000:3000
+    volumes:
+      - ./cache:/app/cache
