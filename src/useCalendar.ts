@@ -222,7 +222,9 @@ export const useCalendar = () => {
 
     cache[calendarId].nextSyncToken = result.data.nextSyncToken
     saveCache(cache)
-    return result.data.items
+
+    // ignore events that were created by CalSync
+    return result.data.items.filter(event => event.creator.email !== process.env.GOOGLE_API_CLIENT_MAIL)
   }
 
   const isOutdated = (source: CalendarCacheEntry) => {
