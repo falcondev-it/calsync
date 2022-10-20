@@ -1,20 +1,16 @@
-import * as fs from 'fs'
-import * as yml from 'yaml'
-
-import { SyncConfig, Config } from './types'
-import { CONFIG_FILE } from './globals'
+import { UserConfig, SyncConfig, Config } from './types.js'
 
 export const useConfig = () => {
-  const users: Array<string> = []
+  const users: Array<UserConfig> = []
   const syncs: Array<SyncConfig> = []
   const sources: Array<string> = []
 
-  const configFile = fs.readFileSync(CONFIG_FILE, 'utf8')
-  const config = yml.parse(configFile) as Config
+  const config = JSON.parse(process.env.CONFIG.replaceAll('\\', '')) as Config
 
-  for (const user in config.users) {
-    for (const sync of config.users[user]) {
-      users.push(user)
+  for (const user of config.users) {
+    users.push(user)
+
+    for (const sync of user.syncs) {
       syncs.push(sync)
 
       for (const source of sync.sources) {

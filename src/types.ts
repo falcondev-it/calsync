@@ -2,17 +2,19 @@ import { calendar_v3 } from "googleapis"
 import { GaxiosError, GaxiosResponse } from "gaxios"
 import { BodyResponseCallback } from "googleapis/build/src/apis/abusiveexperiencereport"
 
-export type Config = {
-  clientMail: string
-  receiverWebhookURL: string
-  port: number
-  users: Record<string, Array<SyncConfig>>
-}
-
 export type SyncConfig = {
-  sources: Array<string>
+  sources: string[]
   target: string
   eventSummary: string
+}
+
+export type UserConfig = {
+  name: string,
+  syncs: SyncConfig[]
+}
+
+export type Config = {
+  users: UserConfig[]
 }
 
 // type CalendarCache = Record<string, CalendarCacheEntry>

@@ -1,24 +1,20 @@
 import { calendar_v3, google } from 'googleapis'
 import { v4 as uuidv4 } from 'uuid'
-import * as fs from 'fs'
-import * as chalk from 'chalk'
+import dotenv from 'dotenv'
+import chalk from 'chalk'
 
-import { useConfig } from './useConfig'
-import { CalendarCacheEntry, CustomApiCall, DefaultApiCall, SyncConfig } from './types'
-import { GOOGLE_PRIVATE_KEY, SCOPES, CALENDAR_CACHE_FILE } from './globals'
-import { FastifyRequest } from 'fastify'
+import { useCache } from './useCache.js'
+import { CalendarCacheEntry, CustomApiCall, DefaultApiCall, SyncConfig } from './types.js'
 import { GaxiosResponse } from 'gaxios'
 
-const { config, syncs } = useConfig()
+dotenv.config()
+const SCOPES = 'https://www.googleapis.com/auth/calendar'
+const { cache, loadCache, saveCache } = useCache()
 
 const calendar = google.calendar({
   version: 'v3',
-  auth: new google.auth.JWT(config.clientMail, GOOGLE_PRIVATE_KEY, undefined, SCOPES),
+  auth: new google.auth.JWT(process.env.GOOGLE_API_CLIENT_MAIL, undefined, process.env.GOOGLE_PRIVATE_KEY, SCOPES),
 })
-
-const calendarCacheFile = fs.readFileSync(CALENDAR_CACHE_FILE, 'utf8')
-let calendarCache = JSON.parse(calendarCacheFile)
-let isReady = false
 
 export const useCalendar = () => {
   // api
@@ -78,7 +74,7 @@ export const useCalendar = () => {
       requestBody: {
         id: uuidv4(),
         type: 'web_hook',
-        address: config.receiverWebhookURL,
+        address: process.env.WEBHOOK_RECEIVER_URL,
       },
     })
 
@@ -176,11 +172,12 @@ export const useCalendar = () => {
   const getEvents = async (calendarId: string) => {
     let result: GaxiosResponse<calendar_v3.Schema$Events>
 
-    if (calendarCache[calendarId].nextSyncToken !== undefined) {
+    loadCache()
+    if (cache[calendarId].nextSyncToken !== undefined) {
       // nth request for this source calendar
       result = await calendar.events.list({
         calendarId: calendarId,
-        syncToken: calendarCache[calendarId].nextSyncToken,
+        syncToken: cache[calendarId].nextSyncToken,
       })
     } else {
       // first request for this source calendar
@@ -191,8 +188,8 @@ export const useCalendar = () => {
       })
     }
 
-    calendarCache[calendarId].nextSyncToken = result.data.nextSyncToken
-    fs.writeFileSync(CALENDAR_CACHE_FILE, JSON.stringify(calendarCache))
+    cache[calendarId].nextSyncToken = result.data.nextSyncToken
+    saveCache()
     return result.data.items
   }
 
@@ -204,15 +201,15 @@ export const useCalendar = () => {
   }
 
   const checkExpirationDates = async () => {
-    calendarCache = JSON.parse(calendarCacheFile)
-    for (const key of Object.keys(calendarCache)) {
+    loadCache()
+    for (const key of Object.keys(cache)) {
 
-      if (isOutdated(calendarCache[key])) {
+      if (isOutdated(cache[key])) {
         // update webhook
         const { channel, expirationDate } = await registerWebhook(key)
-        calendarCache[key].channel = channel
-        calendarCache[key].expirationDate = expirationDate
-        fs.writeFileSync(CALENDAR_CACHE_FILE, JSON.stringify(calendarCache))
+        cache[key].channel = channel
+        cache[key].expirationDate = expirationDate
+        saveCache()
       }
     }
   }
