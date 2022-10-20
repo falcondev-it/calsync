@@ -1,50 +1,96 @@
 import fastify from 'fastify'
-import * as fs from 'fs'
-import * as cron from 'node-cron'
+import chalk from 'chalk'
+import cron from 'node-cron'
+import dotenv from 'dotenv'
+import { Worker } from 'bullmq'
 
-import { useSyncs } from './useSyncs'
-import { useCalendar } from './useCalendar'
-import { useConfig } from './useConfig'
-import { CALENDAR_CACHE_FILE } from './globals'
+import { useCalendar } from './useCalendar.js'
+import { useConfig } from './useConfig.js'
+import { useCache } from './useCache.js'
+import { useQueue } from './useQueue.js'
+import { useOutputFormatter } from './useOutputFormatter.js'
 
-// TODO: make type-safe
+const { registerWebhook, fetchAllEvents, fetchEventsFromSource, syncEvent, checkExpirationDates, isOutdated } = useCalendar()
+const { sources } = useConfig()
+const { loadCache, saveCache } = useCache()
+const { queueName, connection } = useQueue()
+const { handleJob } = useOutputFormatter()
 
-const { sources } = useSyncs()
-const { registerWebhook, handleWebhook, checkExpirationDates } = useCalendar()
-const config = useConfig()
+dotenv.config()
+const app = fastify()
+let installing = true
 
-const calendarCacheFile = fs.readFileSync(CALENDAR_CACHE_FILE, 'utf8')
-const calendarCache = JSON.parse(calendarCacheFile)
+const worker = new Worker(queueName, async (job) => {
+  const { source, sync, event } = job.data
+  await syncEvent(source, sync, event)
+},
+{
+  connection: connection,
+  limiter: { max: 1, duration: 1000 }
+})
 
-const installCalendars = async () => {
-  for (const source of sources) {
-    if (!calendarCache[source]) {
-      const { channel, expirationDate } = await registerWebhook(source)
-      calendarCache[source].channel = channel
-      calendarCache[source].expirationDate = expirationDate
-    }
-  }
 
-  fs.writeFileSync(CALENDAR_CACHE_FILE, JSON.stringify(calendarCache))
-} //main
-
+// main
 ;(async () => {
-  console.log('starting Calsync...')
+  console.log(chalk.bold('Running CalSync...\n'))
   console.log(
-    'Add the Calsync client mail to your source and target calendars as a guest:',
-    config.clientMail
+    'Add the CalSync client mail to your source and target calendars as a guest:\n' + chalk.underline(process.env.GOOGLE_API_CLIENT_MAIL) + '\n'
   )
 
-  const app = fastify({ logger: true })
+  console.log(chalk.bold('Initializing...'))
 
-  app.addHook('onRequest', (request, _, done) => {
-    handleWebhook(request)
-    done()
+  await handleJob('starting server', async () => {
+    app.addHook('onRequest', async (request, _) => {
+      if (installing) return
+
+      // extract channel uuid from notification
+      const channelId = request.headers['x-goog-channel-id']
+
+      // find corresponding source calendar
+      const cache = loadCache()
+      const source = Object.keys(cache).find(
+        (calendarId) => cache[calendarId].channel === channelId
+      )
+
+      // find syncConfig for source calendar
+      fetchEventsFromSource(source)
+    })
+
+    await app.listen({ port: parseInt(process.env.PORT) })
   })
 
-  app.listen({ port: config.port })
+  await handleJob('installing calendars', async () => {
+    // TODO: error handling
+    let cache = loadCache()
+    for (const source of sources) {
+      if (!cache[source]) {
 
-  installCalendars()
+        // register webhook if it doesn't exist
+        cache[source] = await registerWebhook(source)
+        console.log(`${chalk.green('registered:')} ${chalk.gray(source)} `)
+      } else if (isOutdated(cache[source])) {
 
-  cron.schedule('0 2 * * *', checkExpirationDates)
+        // update webhook if it expired
+        cache[source] = await registerWebhook(source)
+        console.log(`${chalk.green('updated:')} ${chalk.gray(source)} `)
+      } else {
+
+        // all up to date
+        console.log(`${chalk.blue('already installed:')} ${chalk.gray(source)} `)
+      }
+
+      saveCache(cache)
+    }
+  })
+
+  await handleJob('starting scheduler', async () => {
+    cron.schedule('0 2 * * *', checkExpirationDates) // every day at 2am
+    cron.schedule('*/10 * * * *', fetchAllEvents) // every 10 minutes
+  })
+
+  console.log(chalk.bold('First polling...\n'))
+  await fetchAllEvents()
+
+  console.log(chalk.bold('Waiting for events...\n'))
+  installing = false
 })()

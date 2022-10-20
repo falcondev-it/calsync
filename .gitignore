@@ -1,5 +1,5 @@
-config.yml
-calendarCache.json
-calsync-private-key.pem
 TODO
 node_modules
+cache
+dist
+.env

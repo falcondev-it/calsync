@@ -1,21 +1,42 @@
-export type Config = {
-  clientMail: string
-  receiverWebhookURL: string
-  port: number
-  initialLastDaysToSync: number
-  users: Record<string, Array<SyncConfig>>
-}
+import { calendar_v3 } from "googleapis"
+import { GaxiosError, GaxiosResponse } from "gaxios"
+import { BodyResponseCallback } from "googleapis/build/src/apis/abusiveexperiencereport"
 
 export type SyncConfig = {
-  sources: Array<string>
+  sources: string[]
   target: string
   eventSummary: string
 }
 
-// export type SyncTokenCache = {
-//   syncTokens: Array<SyncToken>
-// }
+export type UserConfig = {
+  name: string,
+  syncs: SyncConfig[]
+}
 
-// type SyncToken = {
-//   string: string
-// }
+export type Config = {
+  users: UserConfig[]
+}
+
+// type CalendarCache = Record<string, CalendarCacheEntry>
+
+export type CalendarCacheEntry = {
+  channel: string,
+  expirationDate: string,
+  nextSyncToken: string,
+}
+
+type ApiCallback<T = any> = (err: GaxiosError<T> | null, res?: GaxiosResponse<T> | null) => void
+type SchemaErrorEvent = calendar_v3.Schema$Event
+  & { error: { errors: Array<calendar_v3.Schema$Error & { message: string }> }}
+
+export type CustomApiCall = (
+  sync: SyncConfig,
+  event: calendar_v3.Schema$Event,
+  callback: ApiCallback<calendar_v3.Schema$Event | void> | ApiCallback<SchemaErrorEvent>,
+) => void
+
+export type DefaultApiCall = (
+  sync: SyncConfig,
+  event: calendar_v3.Schema$Event,
+  callback: BodyResponseCallback<void>
+) => void
