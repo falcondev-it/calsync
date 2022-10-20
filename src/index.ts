@@ -2,27 +2,33 @@ import fastify from 'fastify'
 import chalk from 'chalk'
 import cron from 'node-cron'
 import dotenv from 'dotenv'
+import { Worker } from 'bullmq'
 
 import { useCalendar } from './useCalendar.js'
 import { useConfig } from './useConfig.js'
 import { useCache } from './useCache.js'
+import { useQueue } from './useQueue.js'
+import { useOutputFormatter } from './useOutputFormatter.js'
 
-const { registerWebhook, getEvents, syncEvent, checkExpirationDates, isOutdated } = useCalendar()
-const { syncs, sources } = useConfig()
+const { registerWebhook, fetchAllEvents, fetchEventsFromSource, syncEvent, checkExpirationDates, isOutdated } = useCalendar()
+const { sources } = useConfig()
 const { loadCache, saveCache } = useCache()
+const { queueName, connection } = useQueue()
+const { handleJob } = useOutputFormatter()
 
 dotenv.config()
 const app = fastify()
+let installing = true
 
-const handleJob = async (name: string, fn: () => Promise<any>) => {
-  console.log(`${name}... `)
-  await fn().then(() => {
-    console.log(chalk.green('done\n'))
-  }).catch((error: Error) => {
-    console.log(chalk.red('failed\n'))
-    console.log(error)
-  })
-}
+const worker = new Worker(queueName, async (job) => {
+  const { source, sync, event } = job.data
+  await syncEvent(source, sync, event)
+},
+{
+  connection: connection,
+  limiter: { max: 1, duration: 1000 }
+})
+
 
 // main
 ;(async () => {
@@ -34,9 +40,20 @@ const handleJob = async (name: string, fn: () => Promise<any>) => {
   console.log(chalk.bold('Initializing...'))
 
   await handleJob('starting server', async () => {
-    app.addHook('onRequest', (request, _, done) => {
-      handleWebhook(request)
-      done()
+    app.addHook('onRequest', async (request, _) => {
+      if (installing) return
+
+      // extract channel uuid from notification
+      const channelId = request.headers['x-goog-channel-id']
+
+      // find corresponding source calendar
+      const cache = loadCache()
+      const source = Object.keys(cache).find(
+        (calendarId) => cache[calendarId].channel === channelId
+      )
+
+      // find syncConfig for source calendar
+      fetchEventsFromSource(source)
     })
 
     await app.listen({ port: parseInt(process.env.PORT) })
@@ -61,23 +78,19 @@ const handleJob = async (name: string, fn: () => Promise<any>) => {
         // all up to date
         console.log(`${chalk.blue('already installed:')} ${chalk.gray(source)} `)
       }
+
       saveCache(cache)
     }
   })
 
   await handleJob('starting scheduler', async () => {
-    cron.schedule('0 2 * * *', checkExpirationDates)
+    cron.schedule('0 15 * * *', checkExpirationDates) // every day at 2am
+    cron.schedule('*/10 * * * *', fetchAllEvents) // every 10 minutes
   })
 
   console.log(chalk.bold('First polling...\n'))
-  for (const user of users) {
-    await handleJob(`syncing calendars for user ${user}`, async () => {
-      for (const sync of config.users[user]) {
-        await syncEvents(sync)
-      }
-    })
-  }
+  await fetchAllEvents()
 
   console.log(chalk.bold('Waiting for events...\n'))
-  setReady(true)
+  installing = false
 })()
