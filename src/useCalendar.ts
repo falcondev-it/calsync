@@ -136,16 +136,26 @@ export const useCalendar = () => {
       return
 
     } else if (event.status === 'cancelled') {
-      // delete event
-
-      deleteEvent(sync, event, (error, _) => {
-        if (error) {
-          console.log(chalk.red('deletion failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
-          console.log(error)
-        } else {
-          console.log(chalk.red('--> deleted event') + ' @ ' + chalk.gray(source + ' -> ' + sync.target))
-        }
+      // check if event to delete was created by CalSync
+      const result = await calendar.events.get({
+        calendarId: sync.target,
+        eventId: event.id,
       })
+
+      if (result.data.creator.email === process.env.GOOGLE_API_CLIENT_MAIL) {
+        // delete event
+        deleteEvent(sync, event, (error, _) => {
+          if (error) {
+            console.log(chalk.red('deletion failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
+            console.log(error)
+          } else {
+            console.log(chalk.red('--> deleted event') + ' @ ' + chalk.gray(source + ' -> ' + sync.target))
+          }
+        })
+      } else {
+        console.log(chalk.blue('skipped deletion') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
+        console.log(chalk.bgBlue('Info: ' + 'Event was not created by CalSync'))
+      }
     }
   }
 
@@ -224,7 +234,10 @@ export const useCalendar = () => {
     saveCache(cache)
 
     // ignore events that were created by CalSync
-    return result.data.items.filter(event => event.creator.email !== process.env.GOOGLE_API_CLIENT_MAIL)
+    return result.data.items.filter(event => {
+      if (!event.creator) return true
+      return event.creator.email !== process.env.GOOGLE_API_CLIENT_MAIL
+    })
   }
 
   const isOutdated = (source: CalendarCacheEntry) => {
