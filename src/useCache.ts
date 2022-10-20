@@ -1,5 +1,6 @@
 import fs from 'fs'
 import dotenv from 'dotenv'
+import { CalendarCacheEntry } from './types'
 
 dotenv.config()
 
@@ -8,15 +9,13 @@ export const useCache = () => {
     fs.writeFileSync(process.env.CALENDAR_CACHE_PATH, '{}')
   }
 
-  let cache = JSON.parse(fs.readFileSync(process.env.CALENDAR_CACHE_PATH, 'utf8'))
-
   const loadCache = () => {
-    cache = JSON.parse(fs.readFileSync(process.env.CALENDAR_CACHE_PATH, 'utf8'))
+    return JSON.parse(fs.readFileSync(process.env.CALENDAR_CACHE_PATH, 'utf8'))
   }
 
-  const saveCache = () => {
+  const saveCache = (cache: CalendarCacheEntry[]) => {
     fs.writeFileSync(process.env.CALENDAR_CACHE_PATH, JSON.stringify(cache))
   }
 
-  return { cache, loadCache, saveCache }
+  return { loadCache, saveCache }
 }

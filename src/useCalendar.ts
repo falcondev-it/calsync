@@ -9,7 +9,7 @@ import { GaxiosResponse } from 'gaxios'
 
 dotenv.config()
 const SCOPES = 'https://www.googleapis.com/auth/calendar'
-const { cache, loadCache, saveCache } = useCache()
+const { loadCache, saveCache } = useCache()
 
 const calendar = google.calendar({
   version: 'v3',
@@ -172,7 +172,7 @@ export const useCalendar = () => {
   const getEvents = async (calendarId: string) => {
     let result: GaxiosResponse<calendar_v3.Schema$Events>
 
-    loadCache()
+    let cache = loadCache()
     if (cache[calendarId].nextSyncToken !== undefined) {
       // nth request for this source calendar
       result = await calendar.events.list({
@@ -181,7 +181,6 @@ export const useCalendar = () => {
       })
     } else {
       // first request for this source calendar
-      console.log('first polling')
       result = await calendar.events.list({
         calendarId: calendarId,
         timeMin: getMinTime(),
@@ -189,7 +188,7 @@ export const useCalendar = () => {
     }
 
     cache[calendarId].nextSyncToken = result.data.nextSyncToken
-    saveCache()
+    saveCache(cache)
     return result.data.items
   }
 
@@ -201,7 +200,7 @@ export const useCalendar = () => {
   }
 
   const checkExpirationDates = async () => {
-    loadCache()
+    let cache = loadCache()
     for (const key of Object.keys(cache)) {
 
       if (isOutdated(cache[key])) {
@@ -209,7 +208,7 @@ export const useCalendar = () => {
         const { channel, expirationDate } = await registerWebhook(key)
         cache[key].channel = channel
         cache[key].expirationDate = expirationDate
-        saveCache()
+        saveCache(cache)
       }
     }
   }

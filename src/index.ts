@@ -9,7 +9,7 @@ import { useCache } from './useCache.js'
 
 const { registerWebhook, getEvents, syncEvent, checkExpirationDates, isOutdated } = useCalendar()
 const { syncs, sources } = useConfig()
-const { cache, loadCache, saveCache } = useCache()
+const { loadCache, saveCache } = useCache()
 
 dotenv.config()
 const app = fastify()
@@ -44,6 +44,7 @@ const handleJob = async (name: string, fn: () => Promise<any>) => {
 
   await handleJob('installing calendars', async () => {
     // TODO: error handling
+    let cache = loadCache()
     for (const source of sources) {
       if (!cache[source]) {
 
@@ -60,7 +61,7 @@ const handleJob = async (name: string, fn: () => Promise<any>) => {
         // all up to date
         console.log(`${chalk.blue('already installed:')} ${chalk.gray(source)} `)
       }
-      saveCache()
+      saveCache(cache)
     }
   })
 
