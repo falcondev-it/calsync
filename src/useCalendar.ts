@@ -185,7 +185,7 @@ export const useCalendar = () => {
 
     // send events to queue
     for (const event of events) {
-      await queue.add(event.id, { source, sync, event })
+      await queue.add(event.id, { source, sync, event }, { removeOnComplete: true })
       console.log(chalk.gray(`<-- event queued from ${source}`))
     }
   }
