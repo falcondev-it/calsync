@@ -42,12 +42,12 @@ const worker = new Worker(queueName, async (job) => {
   console.log(chalk.bold('Initializing...'))
 
   await handleJob('starting server', async () => {
-    app.get('/', async (request, reply) => {
+    app.get('/', async () => {
       return 'CalSync is running!'
     })
 
-    app.addHook('onRequest', async (request, reply) => {
-      if (installing) return
+    app.post('/webhook', async (request, reply) => {
+      if (installing) return reply.send(200)
 
       // extract channel uuid from notification
       const channelId = request.headers['x-goog-channel-id']
@@ -64,7 +64,7 @@ const worker = new Worker(queueName, async (job) => {
       return reply.send(200)
     })
 
-    await app.listen({ port: parseInt(process.env.PORT) })
+    await app.listen({ port: parseInt(process.env.PORT), host: '0.0.0.0' }).then(console.log)
   })
 
   await handleJob('installing calendars', async () => {
