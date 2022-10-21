@@ -25,7 +25,34 @@ const { handleJob } = useOutputFormatter()
 
 export const useSync = () => {
 
+  const deleteEvent = async (sync: SyncConfig, event: calendar_v3.Schema$Event, source: string) => {
+    // check if event to delete was created by CalSync
+    const result = await getCalendarEvent(sync.target, event.id)
+
+    if (result.data.creator.email === process.env.GOOGLE_API_CLIENT_MAIL) {
+      // delete event
+      deleteCalendarEvent(sync, event, (error, _) => {
+        if (error) {
+          console.log(chalk.red('deletion failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
+          console.log(chalk.bgRed('Error: ' + (error as any).errors[0].message))
+        } else {
+          console.log(chalk.red('--> deleted event') + ' @ ' + chalk.gray(source + ' -> ' + sync.target))
+        }
+      })
+    } else {
+      console.log(chalk.blue('skipped deletion') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
+      console.log(chalk.bgBlue('Info: ' + 'Event was not created by CalSync'))
+    }
+  }
+
   const syncEvent = async (source: string, sync: SyncConfig, event: calendar_v3.Schema$Event) => {
+    if (event.transparency === 'transparent') {
+      // try to delete events of target calendar, if transparency was changed to transparent
+      console.log(chalk.bgBlue('Info: Event is not busy --> try to delete target event, if it exists'))
+      await deleteEvent(sync, event, source)
+      return
+    }
+
     if (event.status === 'confirmed') {
       // insert new event
 
@@ -71,23 +98,7 @@ export const useSync = () => {
       return
 
     } else if (event.status === 'cancelled') {
-      // check if event to delete was created by CalSync
-      const result = await getCalendarEvent(sync.target, event.id)
-
-      if (result.data.creator.email === process.env.GOOGLE_API_CLIENT_MAIL) {
-        // delete event
-        deleteCalendarEvent(sync, event, (error, _) => {
-          if (error) {
-            console.log(chalk.red('deletion failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
-            console.log(error)
-          } else {
-            console.log(chalk.red('--> deleted event') + ' @ ' + chalk.gray(source + ' -> ' + sync.target))
-          }
-        })
-      } else {
-        console.log(chalk.blue('skipped deletion') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
-        console.log(chalk.bgBlue('Info: ' + 'Event was not created by CalSync'))
-      }
+      await deleteEvent(sync, event, source)
     }
   }
 
