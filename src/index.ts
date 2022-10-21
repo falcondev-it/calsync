@@ -12,7 +12,7 @@ import { useOutputFormatter } from './useOutputFormatter.js'
 
 const { registerWebhook, fetchAllEvents, fetchEventsFromSource, syncEvent, checkExpirationDates, isOutdated } = useCalendar()
 const { sources } = useConfig()
-const { loadCache, saveCache } = useCache()
+const { loadCache, saveCache, clearCache } = useCache()
 const { queueName, connection } = useQueue()
 const { handleJob } = useOutputFormatter()
 
@@ -48,8 +48,8 @@ const worker = new Worker(queueName, async (job) => {
 
       // find corresponding source calendar
       const cache = loadCache()
-      const source = Object.keys(cache).find(
-        (calendarId) => cache[calendarId].channel === channelId
+      const source = Object.keys(cache.calendars).find(
+        (calendarId) => cache.calendars[calendarId].channel === channelId
       )
 
       // find syncConfig for source calendar
@@ -62,16 +62,22 @@ const worker = new Worker(queueName, async (job) => {
   await handleJob('installing calendars', async () => {
     // TODO: error handling
     let cache = loadCache()
+    if (cache.webhookUrl !== process.env.WEBHOOK_RECEIVER_URL) {
+      console.log('new webhook url --> clearing cache')
+      clearCache()
+      cache = loadCache()
+    }
+
     for (const source of sources) {
-      if (!cache[source]) {
+      if (!cache.calendars[source]) {
 
         // register webhook if it doesn't exist
-        cache[source] = await registerWebhook(source)
+        cache.calendars[source] = await registerWebhook(source)
         console.log(`${chalk.green('registered:')} ${chalk.gray(source)} `)
-      } else if (isOutdated(cache[source])) {
+      } else if (isOutdated(cache.calendars[source])) {
 
         // update webhook if it expired
-        cache[source] = await registerWebhook(source)
+        cache.calendars[source] = await registerWebhook(source)
         console.log(`${chalk.green('updated:')} ${chalk.gray(source)} `)
       } else {
 
@@ -79,6 +85,7 @@ const worker = new Worker(queueName, async (job) => {
         console.log(`${chalk.blue('already installed:')} ${chalk.gray(source)} `)
       }
 
+      cache.webhookUrl = process.env.WEBHOOK_RECEIVER_URL
       saveCache(cache)
     }
   })

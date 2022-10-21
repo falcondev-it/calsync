@@ -17,7 +17,10 @@ export type Config = {
   users: UserConfig[]
 }
 
-// type CalendarCache = Record<string, CalendarCacheEntry>
+export type Cache = {
+  webhookUrl: string,
+  calendars: CalendarCacheEntry[]
+}
 
 export type CalendarCacheEntry = {
   channel: string,

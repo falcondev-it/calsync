@@ -203,18 +203,18 @@ export const useCalendar = () => {
   const getEvents = async (calendarId: string) => {
     let result: GaxiosResponse<calendar_v3.Schema$Events>
 
-    let cache = loadCache()
-    if (cache[calendarId].nextSyncToken !== undefined) {
+    const cache = loadCache()
+    if (cache.calendars[calendarId].nextSyncToken !== undefined) {
       // nth request for this source calendar
       try {
         result = await calendar.events.list({
           calendarId: calendarId,
-          syncToken: cache[calendarId].nextSyncToken,
+          syncToken: cache.calendars[calendarId].nextSyncToken,
         })
       } catch(error) {
         if (error.response.data && error.response.data.error.errors[0].reason === 'fullSyncRequired') {
           // sync token invalid --> reset cache
-          cache[calendarId].nextSyncToken = undefined
+          cache.calendars[calendarId].nextSyncToken = undefined
           saveCache(cache)
           return await getEvents(calendarId)
         }
@@ -230,7 +230,7 @@ export const useCalendar = () => {
       console.log(chalk.yellow('✨ got response') + ' from calendar ' + chalk.gray(calendarId))
     }
 
-    cache[calendarId].nextSyncToken = result.data.nextSyncToken
+    cache.calendars[calendarId].nextSyncToken = result.data.nextSyncToken
     saveCache(cache)
 
     // ignore events that were created by CalSync
@@ -249,14 +249,14 @@ export const useCalendar = () => {
 
   const checkExpirationDates = async () => {
     await handleJob('checking expiration dates', async () => {
-      let cache = loadCache()
+      const cache = loadCache()
       for (const key of Object.keys(cache)) {
 
         if (isOutdated(cache[key])) {
           // update webhook
           const { channel, expirationDate } = await registerWebhook(key)
-          cache[key].channel = channel
-          cache[key].expirationDate = expirationDate
+          cache.calendars[key].channel = channel
+          cache.calendars[key].expirationDate = expirationDate
           saveCache(cache)
           console.log('updated webhook for calendar ' + chalk.gray(key))
         }
