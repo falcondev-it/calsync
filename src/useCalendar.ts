@@ -181,12 +181,11 @@ export const useCalendar = () => {
     }
   }
 
-  const fetchEventsFromSource = async (source: string, sync: SyncConfig | undefined = undefined) => {
-    if (!sync) {
-      sync = syncs.find(sync => sync.sources.includes(source))
-    }
+  const fetchEventsFromSource = async (source: string, specificSync: SyncConfig | undefined = undefined) => {
+    // find all syncs that include the source
+    const syncsWithSource = specificSync ? [specificSync] : syncs.filter(sync => sync.sources.includes(source))
 
-    if (!sync) {
+    if (syncsWithSource.length === 0) {
       console.log(chalk.red('no sync found for source ' + source))
       return
     }
@@ -195,8 +194,10 @@ export const useCalendar = () => {
 
     // send events to queue
     for (const event of events) {
-      await queue.add(event.id, { source, sync, event }, { removeOnComplete: true })
-      console.log(chalk.gray(`<-- event queued from ${source}`))
+      for (const sync of syncsWithSource) {
+        await queue.add(event.id, { source, sync, event }, { removeOnComplete: true })
+        console.log(chalk.gray(`<-- event queued from ${source}`))
+      }
     }
   }
 
