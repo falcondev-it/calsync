@@ -1,21 +1,29 @@
 import fs from 'fs'
 import dotenv from 'dotenv'
-import { CalendarCacheEntry } from './types'
+import { Cache } from './types'
 
 dotenv.config()
 
+const initialCache = {
+  webhookUrl: "",
+  calendars: {},
+}
+
 export const useCache = () => {
-  if (!fs.existsSync(process.env.CALENDAR_CACHE_PATH)) {
-    fs.writeFileSync(process.env.CALENDAR_CACHE_PATH, '{}')
+
+  const clearCache = () => {
+    fs.writeFileSync(process.env.CALENDAR_CACHE_PATH, JSON.stringify(initialCache))
   }
 
   const loadCache = () => {
-    return JSON.parse(fs.readFileSync(process.env.CALENDAR_CACHE_PATH, 'utf8'))
+    return JSON.parse(fs.readFileSync(process.env.CALENDAR_CACHE_PATH, 'utf8')) as Cache
   }
 
-  const saveCache = (cache: CalendarCacheEntry[]) => {
+  const saveCache = (cache: Cache) => {
     fs.writeFileSync(process.env.CALENDAR_CACHE_PATH, JSON.stringify(cache))
   }
 
-  return { loadCache, saveCache }
+  if (!fs.existsSync(process.env.CALENDAR_CACHE_PATH)) clearCache()
+
+  return { loadCache, saveCache, clearCache }
 }

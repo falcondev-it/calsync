@@ -3,7 +3,7 @@ import { UserConfig, SyncConfig, Config } from './types.js'
 export const useConfig = () => {
   const users: Array<UserConfig> = []
   const syncs: Array<SyncConfig> = []
-  const sources: Array<string> = []
+  const sources: Set<string> = new Set()
 
   const config = JSON.parse(process.env.CONFIG.replaceAll('\\', '')) as Config
 
@@ -14,7 +14,7 @@ export const useConfig = () => {
       syncs.push(sync)
 
       for (const source of sync.sources) {
-        sources.push(source)
+        sources.add(source)
       }
     }
   }
