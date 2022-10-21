@@ -35,6 +35,7 @@ type SchemaErrorEvent = calendar_v3.Schema$Event
 export type CustomApiCall = (
   sync: SyncConfig,
   event: calendar_v3.Schema$Event,
+  isPrivate: boolean,
   callback: ApiCallback<calendar_v3.Schema$Event | void> | ApiCallback<SchemaErrorEvent>,
 ) => void
 
