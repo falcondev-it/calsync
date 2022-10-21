@@ -6,10 +6,9 @@
   "type": "module",
   "scripts": {
     "start": "ts-node src/index.ts",
-    "dev": "nodemon --watch src --exec 'ts-node --esm src/index.ts'",
+    "dev": "doppler run -- nodemon --watch src --exec 'ts-node --esm src/index.ts'",
     "lint": "eslint . --ext .ts",
-    "build": "tsc",
-    "postinstall": "doppler secrets download --no-file --format env > .env"
+    "build": "tsc"
   },
   "author": "",
   "license": "ISC",
