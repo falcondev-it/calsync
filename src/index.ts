@@ -42,7 +42,11 @@ const worker = new Worker(queueName, async (job) => {
   console.log(chalk.bold('Initializing...'))
 
   await handleJob('starting server', async () => {
-    app.addHook('onRequest', async (request, _) => {
+    app.get('/', async (request, reply) => {
+      return 'CalSync is running!'
+    })
+
+    app.addHook('onRequest', async (request, reply) => {
       if (installing) return
 
       // extract channel uuid from notification
@@ -55,7 +59,9 @@ const worker = new Worker(queueName, async (job) => {
       )
 
       // find syncConfig for source calendar
-      fetchEventsFromSource(source)
+      await fetchEventsFromSource(source)
+
+      return reply.send(200)
     })
 
     await app.listen({ port: parseInt(process.env.PORT) })
