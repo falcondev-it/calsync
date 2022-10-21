@@ -25,43 +25,58 @@ export const useCalendar = () => {
     })
   }
 
-  const updateCalendarInstance: CustomApiCall = (sync, event, callback) => {
+  const getEventInfo = (isPrivate: boolean, event: calendar_v3.Schema$Event) => {
+    if (isPrivate) {
+      return {}
+    } else {
+      return {
+        description: event.description,
+        location: event.location,
+        conferenceData: event.conferenceData
+      }
+    }
+  }
+
+  const updateCalendarInstance: CustomApiCall = (sync, event, isPrivate, callback) => {
     calendar.events.update({
       calendarId: sync.target,
       eventId: event.id,
       requestBody: {
-        summary: sync.eventSummary,
+        summary: isPrivate ? sync.eventSummary : event.summary,
         start: event.start,
         end: event.end,
         recurrence: event.recurrence,
         recurringEventId: event.recurringEventId,
+        ...getEventInfo(isPrivate, event),
       },
     }, callback)
   }
 
-  const insertCalendarEvent: CustomApiCall = (sync, event, callback) => {
+  const insertCalendarEvent: CustomApiCall = (sync, event, isPrivate, callback) => {
     calendar.events.insert({
       calendarId: sync.target,
       requestBody: {
-        summary: sync.eventSummary,
+        summary: isPrivate ? sync.eventSummary : event.summary,
         start: event.start,
         end: event.end,
         id: event.id,
         recurrence: event.recurrence,
+        ...getEventInfo(isPrivate, event),
       },
     }, callback)
   }
 
-  const updateCalendarEvent: CustomApiCall = (sync, event, callback) => {
+  const updateCalendarEvent: CustomApiCall = (sync, event, isPrivate, callback) => {
     calendar.events.update({
       calendarId: sync.target,
       eventId: event.id,
       requestBody: {
-        summary: sync.eventSummary,
+        summary: isPrivate ? sync.eventSummary : event.summary,
         start: event.start,
         end: event.end,
         recurrence: event.recurrence,
         recurringEventId: event.recurringEventId,
+        ...getEventInfo(isPrivate, event),
       },
     }, callback)
   }

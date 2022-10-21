@@ -54,10 +54,11 @@ export const useSync = () => {
     }
 
     if (event.status === 'confirmed') {
-      // insert new event
+      const isPrivate = event.visibility === 'private'
 
+      // insert new event
       if (event.recurringEventId) {
-        updateCalendarInstance(sync, event, (error, _) => {
+        updateCalendarInstance(sync, event, isPrivate, (error, _) => {
           if (error && error.response.data) {
             console.log(chalk.red('creation failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
             console.log(chalk.red('Error: ' + error.response.data.error.errors[0].reason))
@@ -70,12 +71,12 @@ export const useSync = () => {
         return
       }
 
-      insertCalendarEvent(sync, event, (error, _) => {
+      insertCalendarEvent(sync, event, isPrivate, (error, _) => {
         if (error && error.response.data) {
           if (error.response.data.error.errors[0].reason === 'duplicate') {
             // event already exists --> try to update event
 
-            updateCalendarEvent(sync, event, (error, _) => {
+            updateCalendarEvent(sync, event, isPrivate, (error, _) => {
               if (error && error.response.data) {
                 console.log(chalk.red('update failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
                 console.log(chalk.bgRed('Error: ' + error.response.data.error.errors[0].reason))
