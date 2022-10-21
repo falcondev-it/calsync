@@ -4,13 +4,15 @@ import cron from 'node-cron'
 import dotenv from 'dotenv'
 import { Worker } from 'bullmq'
 
-import { useCalendar } from './useCalendar.js'
+import { useSync } from './useSync.js'
 import { useConfig } from './useConfig.js'
 import { useCache } from './useCache.js'
 import { useQueue } from './useQueue.js'
+import { useCalendar } from './useCalendar.js'
 import { useOutputFormatter } from './useOutputFormatter.js'
 
-const { registerWebhook, fetchAllEvents, fetchEventsFromSource, syncEvent, checkExpirationDates, isOutdated } = useCalendar()
+const { fetchAllEvents, fetchEventsFromSource, syncEvent, checkExpirationDates, isOutdated } = useSync()
+const { registerWebhook } = useCalendar()
 const { sources } = useConfig()
 const { loadCache, saveCache, clearCache } = useCache()
 const { queueName, connection } = useQueue()

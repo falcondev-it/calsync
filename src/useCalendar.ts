@@ -3,19 +3,13 @@ import { v4 as uuidv4 } from 'uuid'
 import dotenv from 'dotenv'
 import chalk from 'chalk'
 
-import { useCache } from './useCache.js'
-import { useConfig } from './useConfig.js'
-import { useQueue } from './useQueue.js'
-import { useOutputFormatter } from './useOutputFormatter.js'
-import { CalendarCacheEntry, CustomApiCall, DefaultApiCall, SyncConfig } from './types.js'
 import { GaxiosResponse } from 'gaxios'
+import { CustomApiCall, DefaultApiCall } from './types.js'
+import { useCache } from './useCache.js'
 
 dotenv.config()
 const SCOPES = 'https://www.googleapis.com/auth/calendar'
 const { loadCache, saveCache } = useCache()
-const { syncs, users } = useConfig()
-const { queue } = useQueue()
-const { handleJob } = useOutputFormatter()
 
 const calendar = google.calendar({
   version: 'v3',
@@ -24,7 +18,14 @@ const calendar = google.calendar({
 
 export const useCalendar = () => {
   // api
-  const updateInstance: CustomApiCall = (sync, event, callback) => {
+  const getCalendarEvent = async (calendarId: string, eventId: string) => {
+    return await calendar.events.get({
+      calendarId: calendarId,
+      eventId: eventId,
+    })
+  }
+
+  const updateCalendarInstance: CustomApiCall = (sync, event, callback) => {
     calendar.events.update({
       calendarId: sync.target,
       eventId: event.id,
@@ -38,7 +39,7 @@ export const useCalendar = () => {
     }, callback)
   }
 
-  const insertEvent: CustomApiCall = (sync, event, callback) => {
+  const insertCalendarEvent: CustomApiCall = (sync, event, callback) => {
     calendar.events.insert({
       calendarId: sync.target,
       requestBody: {
@@ -51,7 +52,7 @@ export const useCalendar = () => {
     }, callback)
   }
 
-  const updateEvent: CustomApiCall = (sync, event, callback) => {
+  const updateCalendarEvent: CustomApiCall = (sync, event, callback) => {
     calendar.events.update({
       calendarId: sync.target,
       eventId: event.id,
@@ -65,7 +66,7 @@ export const useCalendar = () => {
     }, callback)
   }
 
-  const deleteEvent: DefaultApiCall = (sync, event, callback) => {
+  const deleteCalendarEvent: DefaultApiCall = (sync, event, callback) => {
     calendar.events.delete({
       calendarId: sync.target,
       eventId: event.id,
@@ -90,115 +91,10 @@ export const useCalendar = () => {
     }
   }
 
-  const syncEvent = async (source: string, sync: SyncConfig, event: calendar_v3.Schema$Event) => {
-    if (event.status === 'confirmed') {
-      // insert new event
-
-      if (event.recurringEventId) {
-        updateInstance(sync, event, (error, _) => {
-          if (error && error.response.data) {
-            console.log(chalk.red('creation failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
-            console.log(chalk.red('Error: ' + error.response.data.error.errors[0].reason))
-          } else if (error) {
-            console.log(error)
-          } else {
-            console.log(chalk.green('--> created instance') + ' @ ' + chalk.gray(source + ' -> ' + sync.target))
-          }
-        })
-        return
-      }
-
-      insertEvent(sync, event, (error, _) => {
-        if (error && error.response.data) {
-          if (error.response.data.error.errors[0].reason === 'duplicate') {
-            // event already exists --> try to update event
-
-            updateEvent(sync, event, (error, _) => {
-              if (error && error.response.data) {
-                console.log(chalk.red('update failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
-                console.log(chalk.bgRed('Error: ' + error.response.data.error.errors[0].reason))
-              } else if (error) {
-                console.log(error)
-              } else {
-                console.log(chalk.yellow('--> updated event') + ' @ ' + chalk.gray(source + ' -> ' + sync.target))
-              }
-            })
-          }
-        } else if (error && error.response.data) {
-          console.log(chalk.red('creation failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
-          console.log(chalk.bgRed('Error: ' + error.response.data.error.errors[0].reason))
-        } else if (error) {
-          console.log(error)
-        } else {
-          console.log(chalk.green('--> created event') + ' @ ' + chalk.gray(source + ' -> ' + sync.target))
-        }
-      })
-      return
-
-    } else if (event.status === 'cancelled') {
-      // check if event to delete was created by CalSync
-      const result = await calendar.events.get({
-        calendarId: sync.target,
-        eventId: event.id,
-      })
-
-      if (result.data.creator.email === process.env.GOOGLE_API_CLIENT_MAIL) {
-        // delete event
-        deleteEvent(sync, event, (error, _) => {
-          if (error) {
-            console.log(chalk.red('deletion failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
-            console.log(error)
-          } else {
-            console.log(chalk.red('--> deleted event') + ' @ ' + chalk.gray(source + ' -> ' + sync.target))
-          }
-        })
-      } else {
-        console.log(chalk.blue('skipped deletion') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
-        console.log(chalk.bgBlue('Info: ' + 'Event was not created by CalSync'))
-      }
-    }
-  }
-
   const getMinTime = () => {
     const now = new Date()
     now.setDate(now.getDate())
     return now.toISOString()
-  }
-
-  const fetchAllEvents = async () => {
-    for (const user of users) {
-      await handleJob(`fetching calendars for user ${user.name}`, async () => {
-        for (const sync of user.syncs) {
-          await fetchEventsFromSync(sync)
-        }
-      })
-    }
-  }
-
-  const fetchEventsFromSync = async (sync: SyncConfig) => {
-    for (const source of sync.sources) {
-      await fetchEventsFromSource(source, sync)
-    }
-  }
-
-  const fetchEventsFromSource = async (source: string, specificSync: SyncConfig | undefined = undefined) => {
-    // find all syncs that include the source
-    const syncsWithSource = specificSync ? [specificSync] : syncs.filter(sync => sync.sources.includes(source))
-
-    if (syncsWithSource.length === 0) {
-      console.log(chalk.red('no sync found for source ' + source))
-      return
-    }
-
-    const events = await getEvents(source)
-
-    // send events to queue
-    for (const event of events) {
-      for (const sync of syncsWithSource) {
-        await queue.add(event.id, { source, sync, event }, { removeOnComplete: true })
-        console.log(chalk.gray(`<-- event queued from ${source}`))
-      }
-    }
   }
 
   const getEvents = async (calendarId: string) => {
@@ -234,36 +130,20 @@ export const useCalendar = () => {
     cache.calendars[calendarId].nextSyncToken = result.data.nextSyncToken
     saveCache(cache)
 
-    // ignore events that were created by CalSync
+      // ignore events that were created by CalSync
     return result.data.items.filter(event => {
       if (!event.creator) return true
       return event.creator.email !== process.env.GOOGLE_API_CLIENT_MAIL
     })
   }
 
-  const isOutdated = (source: CalendarCacheEntry) => {
-    const expirationDate = new Date(source.expirationDate)
-    const hoursLeft = (expirationDate.getTime() - new Date().getTime()) / (1000 * 60 * 60)
-
-    return hoursLeft < 24
+  return {
+    getCalendarEvent,
+    updateCalendarInstance,
+    insertCalendarEvent,
+    updateCalendarEvent,
+    deleteCalendarEvent,
+    registerWebhook,
+    getEvents
   }
-
-  const checkExpirationDates = async () => {
-    await handleJob('checking expiration dates', async () => {
-      const cache = loadCache()
-      for (const key of Object.keys(cache)) {
-
-        if (isOutdated(cache[key])) {
-          // update webhook
-          const { channel, expirationDate } = await registerWebhook(key)
-          cache.calendars[key].channel = channel
-          cache.calendars[key].expirationDate = expirationDate
-          saveCache(cache)
-          console.log('updated webhook for calendar ' + chalk.gray(key))
-        }
-      }
-    })
-  }
-
-  return { registerWebhook, getEvents, fetchAllEvents, fetchEventsFromSync, fetchEventsFromSource, syncEvent, checkExpirationDates, isOutdated }
 }
