@@ -129,23 +129,31 @@ export const useCalendar = () => {
           cache.calendars[calendarId].nextSyncToken = undefined
           saveCache(cache)
           return await getEvents(calendarId)
+        } else {
+          console.log(error)
         }
       }
     } else {
       // first request for this source calendar
 
-      result = await calendar.events.list({
-        calendarId: calendarId,
-        timeMin: getMinTime(),
-      })
+      try {
+        result = await calendar.events.list({
+          calendarId: calendarId,
+          timeMin: getMinTime(),
+        })
+      } catch(error) {
+        console.log(error)
+      }
 
       console.log(chalk.yellow('✨ got response') + ' from calendar ' + chalk.gray(calendarId))
     }
 
+    if (!result) return []
+
     cache.calendars[calendarId].nextSyncToken = result.data.nextSyncToken
     saveCache(cache)
 
-      // ignore events that were created by CalSync
+    // ignore events that were created by CalSync
     return result.data.items.filter(event => {
       if (!event.creator) return true
       return event.creator.email !== process.env.GOOGLE_API_CLIENT_MAIL
