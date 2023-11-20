@@ -162,14 +162,17 @@ export const useSync = () => {
     }
 
     const events = await getEvents(source)
+    let jobs = []
 
     // send events to queue
     for (const event of events) {
       for (const sync of syncsWithSource) {
-        await queue.add(event.id, { source, sync, event }, { removeOnComplete: true })
-        console.log(chalk.gray(`<-- event queued from ${source}`))
+        jobs.push({name: event.id, data: { source, sync, event }, opts:{ removeOnComplete: true }})
       }
     }
+
+    await queue.addBulk(jobs)
+    console.log(chalk.gray(`<-- queued ${jobs.length} jobs from ${source}`))
   }
 
   const isOutdated = (source: CalendarCacheEntry) => {
