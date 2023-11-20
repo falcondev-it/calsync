@@ -26,7 +26,11 @@ export const useCalendar = () => {
 
   const getEventInfo = (isPrivate: boolean, event: calendar_v3.Schema$Event) => {
     if (isPrivate) {
-      return {}
+      return {
+        description: undefined,
+        location: undefined,
+        conferenceData: undefined
+      }
     } else {
       return {
         description: event.description,
