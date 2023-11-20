@@ -8,6 +8,7 @@ import { useCache } from './useCache.js'
 import { useCalendar } from './useCalendar.js'
 import { useOutputFormatter } from './useOutputFormatter.js'
 import { CalendarCacheEntry, SyncConfig } from './types.js'
+import { inspect } from 'util'
 
 const { syncs, users } = useConfig()
 const { loadCache, saveCache } = useCache()
@@ -46,64 +47,94 @@ export const useSync = () => {
   }
 
   const syncEvent = async (source: string, sync: SyncConfig, event: calendar_v3.Schema$Event) => {
-    if (event.transparency === 'transparent') {
-      // try to delete events of target calendar, if transparency was changed to transparent
+    console.log({
+      id: event.id,
+      recurrence: event.recurrence,
+      recurringEventId: event.recurringEventId,
+      status: event.status,
+      organizer: event.organizer
+    })
+
+    let eventId = event.id
+
+    const isSelfCreated = event.organizer && event.organizer.email === source
+    const isRecurring = !!event.recurrence
+    const isInstance = !!event.recurringEventId
+    const isDeleted = event.status === 'cancelled'
+    const isPrivate = event.visibility === 'private'
+    const isBusy = event.transparency !== 'transparent'
+
+    if ((!isSelfCreated && isRecurring) || (isDeleted && isInstance)) {
+      eventId = event.id!.split('_')[0]
+    }
+
+    const tmpEvent = {
+      ...event,
+      id: eventId
+    }
+
+    if (!isBusy) {
       console.log(chalk.bgBlue('Info: Event is not busy --> try to delete target event, if it exists'))
-      await deleteEvent(sync, event, source)
+      await deleteEvent(sync, tmpEvent, source)
       return
     }
 
-    if (event.status === 'confirmed') {
-      const isPrivate = event.visibility === 'private'
+    if (isDeleted) {
+      await deleteEvent(sync, tmpEvent, source)
+      return
+    }
 
-      // insert new event
-      if (event.recurringEventId) {
-        updateCalendarInstance(sync, event, isPrivate, (error, _) => {
-          if (error && error.response.data) {
-            console.log(chalk.red('creation failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
-            console.log(chalk.red('Error: ' + error.response.data.error.errors[0].reason))
-          } else if (error) {
-            console.log(error)
-          } else {
-            console.log(chalk.green('--> created instance') + ' @ ' + chalk.gray(source + ' -> ' + sync.target))
-          }
-        })
-        return
-      }
-
-      insertCalendarEvent(sync, event, isPrivate, (error, _) => {
+    if (isInstance) {
+      updateCalendarInstance(sync, tmpEvent, isPrivate, (error, _)=> {
         if (error && error.response.data) {
-          if (error.response.data.error.errors[0].reason === 'duplicate') {
-            // event already exists --> try to update event
+          if (error.response.data.error.errors[0].reason === 'notFound') {
+            // insert missing recurring parent
+            const missingParent = {
+              ...event,
+              id: event.recurringEventId,
+              recurringEventId: undefined,
+            }
 
-            updateCalendarEvent(sync, event, isPrivate, (error, _) => {
-              if (error && error.response.data) {
-                console.log(chalk.red('update failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
-                console.log(chalk.bgRed('Error: ' + error.response.data.error.errors[0].reason))
-              } else if (error) {
-                console.log(error)
-              } else {
-                console.log(chalk.yellow('--> updated event') + ' @ ' + chalk.gray(source + ' -> ' + sync.target))
-              }
-            })
+            syncEvent(source, sync, missingParent)
+          } else {
+            console.log(chalk.red('creation of instance failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
+            console.log(chalk.red('Error: ' + inspect(error.response.data.error.errors[0])))
+            console.log(error)
           }
-        } else if (error && error.response.data) {
-          console.log(chalk.red('creation failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
-          console.log(chalk.bgRed('Error: ' + error.response.data.error.errors[0].reason))
-        } else if (error) {
-          console.log(error)
         } else {
-          console.log(chalk.green('--> created event') + ' @ ' + chalk.gray(source + ' -> ' + sync.target))
+          console.log(chalk.green('--> created instance') + ' @ ' + chalk.gray(source + ' -> ' + sync.target))
         }
       })
       return
-
-    } else if (event.status === 'cancelled') {
-      await deleteEvent(sync, event, source)
     }
+
+    insertCalendarEvent(sync, tmpEvent, isPrivate, (error, _) => {
+      if (error && error.response.data) {
+        if (error.response.data.error.errors[0].reason === 'duplicate') {
+          // event already exists --> try to update event
+
+          updateCalendarEvent(sync, tmpEvent, isPrivate, (error, _) => {
+            if (error && error.response.data) {
+              console.log(chalk.red('update failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
+              console.log(chalk.bgRed('Error: ' + inspect(error.response.data.error.errors[0])))
+            } else if (error) {
+              console.log(error)
+            } else {
+              console.log(chalk.yellow('--> updated event') + ' @ ' + chalk.gray(source + ' -> ' + sync.target))
+            }
+          })
+        }
+      } else if (error && error.response.data) {
+        console.log(chalk.red('creation failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
+        console.log(chalk.bgRed('Error: ' + inspect(error.response.data.error.errors[0])))
+      } else if (error) {
+        console.log(error)
+      } else {
+        console.log(chalk.green('--> created event') + ' @ ' + chalk.gray(source + ' -> ' + sync.target))
+      }
+    })
+    return
   }
-
-
 
   const fetchAllEvents = async () => {
     for (const user of users) {
