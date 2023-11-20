@@ -6,40 +6,36 @@
   "type": "module",
   "scripts": {
     "start": "ts-node src/index.ts",
-    "dev": "nodemon --watch src --exec 'ts-node --esm src/index.ts'",
+    "dev": "doppler run -- bun --watch ./src/index.ts",
     "lint": "eslint . --ext .ts",
-    "build": "tsc",
-    "postinstall": "doppler secrets download --no-file --format env > .env"
+    "build": "tsc"
   },
   "author": "",
-  "license": "ISC",
   "dependencies": {
     "axios": "^0.27.2",
     "bullmq": "^2.3.2",
-    "chalk": "^5.1.2",
-    "dotenv": "^16.0.3",
-    "fastify": "^4.9.1",
-    "gaxios": "^5.0.2",
-    "googleapis": "^107.0.0",
-    "node-cron": "^3.0.2",
-    "nodemon": "^2.0.20",
-    "ts-node": "^10.9.1",
-    "uuid": "^9.0.0"
+    "chalk": "^5.3.0",
+    "dotenv": "^16.3.1",
+    "fastify": "^4.24.3",
+    "gaxios": "^6.1.1",
+    "googleapis": "^128.0.0",
+    "node-cron": "^3.0.3",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "@types/express": "^4.17.14",
-    "@types/node": "^18.11.0",
-    "@types/node-cron": "^3.0.4",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.9.0",
+    "@types/node-cron": "^3.0.11",
     "@types/uuid": "^8.3.4",
-    "@typescript-eslint/eslint-plugin": "^5.40.1",
-    "@typescript-eslint/parser": "^5.40.1",
-    "esbuild": "^0.15.11",
+    "@typescript-eslint/eslint-plugin": "^6.11.0",
+    "@typescript-eslint/parser": "^6.11.0",
+    "esbuild": "^0.19.5",
     "esbuild-runner": "^2.2.2",
-    "eslint": "^8.25.0",
-    "eslint-config-prettier": "^8.5.0",
-    "eslint-plugin-prettier": "^4.2.1",
-    "prettier": "^2.7.1",
+    "eslint": "^8.53.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.1",
+    "prettier": "^3.1.0",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^4.8.4"
+    "typescript": "^5.2.2"
   }
 }
