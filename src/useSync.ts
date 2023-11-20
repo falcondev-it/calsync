@@ -4,14 +4,12 @@ import chalk from 'chalk'
 
 import { useConfig } from './useConfig.js'
 import { useQueue } from './useQueue.js'
-import { useCache } from './useCache.js'
 import { useCalendar } from './useCalendar.js'
 import { useOutputFormatter } from './useOutputFormatter.js'
-import { CalendarCacheEntry, SyncConfig } from './types.js'
+import { SyncConfig } from './types.js'
 import { inspect } from 'util'
 
 const { syncs, users } = useConfig()
-const { loadCache, saveCache } = useCache()
 const {
   updateCalendarInstance,
   insertCalendarEvent,
@@ -19,7 +17,6 @@ const {
   getCalendarEvent,
   deleteCalendarEvent,
   getEvents,
-  registerWebhook,
 } = useCalendar()
 const { queue } = useQueue()
 const { handleJob } = useOutputFormatter()
@@ -175,36 +172,10 @@ export const useSync = () => {
     console.log(chalk.gray(`<-- queued ${jobs.length} jobs from ${source}`))
   }
 
-  const isOutdated = (source: CalendarCacheEntry) => {
-    const expirationDate = new Date(source.expirationDate)
-    const hoursLeft = (expirationDate.getTime() - new Date().getTime()) / (1000 * 60 * 60)
-
-    return hoursLeft < 24
-  }
-
-  const checkExpirationDates = async () => {
-    await handleJob('checking expiration dates', async () => {
-      const cache = loadCache()
-      for (const key of Object.keys(cache)) {
-
-        if (isOutdated(cache[key])) {
-          // update webhook
-          const { channel, expirationDate } = await registerWebhook(key)
-          cache.calendars[key].channel = channel
-          cache.calendars[key].expirationDate = expirationDate
-          saveCache(cache)
-          console.log('updated webhook for calendar ' + chalk.gray(key))
-        }
-      }
-    })
-  }
-
   return {
     fetchAllEvents,
     fetchEventsFromSync,
     fetchEventsFromSource,
     syncEvent,
-    checkExpirationDates,
-    isOutdated
   }
 }

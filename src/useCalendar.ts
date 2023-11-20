@@ -1,5 +1,4 @@
 import { calendar_v3, google } from 'googleapis'
-import { v4 as uuidv4 } from 'uuid'
 import dotenv from 'dotenv'
 import chalk from 'chalk'
 
@@ -88,24 +87,6 @@ export const useCalendar = () => {
     }, callback)
   }
 
-
-  // TODO: error handling
-  const registerWebhook = async (calendarId: string) => {
-    const result = await calendar.events.watch({
-      calendarId: calendarId,
-      requestBody: {
-        id: uuidv4(),
-        type: 'web_hook',
-        address: process.env.WEBHOOK_RECEIVER_URL,
-      },
-    })
-
-    return {
-      channel: result.data.id,
-      expirationDate: new Date(parseInt(result.data.expiration)).toISOString(),
-    }
-  }
-
   const getMinTime = () => {
     const now = new Date()
     now.setDate(now.getDate())
@@ -158,7 +139,6 @@ export const useCalendar = () => {
     insertCalendarEvent,
     updateCalendarEvent,
     deleteCalendarEvent,
-    registerWebhook,
     getEvents
   }
 }

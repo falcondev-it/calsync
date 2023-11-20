@@ -5,7 +5,6 @@ import { Cache } from './types'
 dotenv.config()
 
 const initialCache = {
-  webhookUrl: "",
   calendars: {},
 }
 
