@@ -44,13 +44,13 @@ export const useSync = () => {
   }
 
   const syncEvent = async (source: string, sync: SyncConfig, event: calendar_v3.Schema$Event) => {
-    console.log({
-      id: event.id,
-      recurrence: event.recurrence,
-      recurringEventId: event.recurringEventId,
-      status: event.status,
-      organizer: event.organizer
-    })
+    // console.log({
+    //   id: event.id,
+    //   recurrence: event.recurrence,
+    //   recurringEventId: event.recurringEventId,
+    //   status: event.status,
+    //   organizer: event.organizer
+    // })
 
     let eventId = event.id
 
