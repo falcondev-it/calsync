@@ -15,5 +15,4 @@ WORKDIR /app
 COPY --from=build-stage /app/dist ./dist
 COPY --from=build-stage /app/node_modules ./node_modules
 COPY --from=build-stage /app/package.json ./package.json
-COPY --from=build-stage /app/.env ./.env
 CMD ["node", "dist/index.js"]
