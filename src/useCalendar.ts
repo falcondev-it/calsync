@@ -18,7 +18,7 @@ const calendar = google.calendar({
 export const useCalendar = () => {
   // api
   const getCalendarEvent = async (calendarId: string, eventId: string) => {
-    return await calendar.events.get({
+    return calendar.events.get({
       calendarId: calendarId,
       eventId: eventId,
     })

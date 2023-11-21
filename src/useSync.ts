@@ -8,6 +8,7 @@ import { useCalendar } from './useCalendar.js'
 import { useOutputFormatter } from './useOutputFormatter.js'
 import { SyncConfig } from './types.js'
 import { inspect } from 'util'
+import { calendar } from 'googleapis/build/src/apis/calendar'
 
 const { syncs, users } = useConfig()
 const {
@@ -25,11 +26,29 @@ export const useSync = () => {
 
   const deleteEvent = async (sync: SyncConfig, event: calendar_v3.Schema$Event, source: string) => {
     // check if event to delete was created by CalSync
-    const result = await getCalendarEvent(sync.target, event.id)
+    let result
+    let eventId = event.id
+
+    try {
+      result = await getCalendarEvent(sync.target, eventId)
+    } catch(error) {
+      if (error.errors[0].reason === 'notFound') {
+        try {
+          eventId = event.id.split('_')[0]
+          result = await getCalendarEvent(sync.target, eventId)
+        } catch(error) {
+          console.log(error)
+          return
+        }
+      } else {
+        console.log(error)
+        return
+      }
+    }
 
     if (result.data.creator.email === process.env.GOOGLE_API_CLIENT_MAIL) {
       // delete event
-      deleteCalendarEvent(sync, event, (error, _) => {
+      deleteCalendarEvent(sync, { ...event, id: eventId }, (error, _) => {
         if (error) {
           console.log(chalk.red('deletion failed') + ' @ ' + chalk.gray(source) + chalk.red(' -/-> ')  + chalk.gray(sync.target))
           console.log(chalk.bgRed('Error: ' + (error as any).errors[0].message))
@@ -51,7 +70,6 @@ export const useSync = () => {
     //   status: event.status,
     //   organizer: event.organizer
     // })
-
     let eventId = event.id
 
     const isSelfCreated = event.organizer && event.organizer.email === source
@@ -61,7 +79,7 @@ export const useSync = () => {
     const isPrivate = event.visibility === 'private'
     const isBusy = event.transparency !== 'transparent'
 
-    if ((!isSelfCreated && isRecurring) || (isDeleted && isInstance)) {
+    if (!isSelfCreated && isRecurring) {
       eventId = event.id!.split('_')[0]
     }
 
