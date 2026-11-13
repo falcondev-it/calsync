@@ -1,4 +1,4 @@
-FROM node:16-alpine as build-stage
+FROM node:24-alpine as build-stage
 ARG DOPPLER_TOKEN
 WORKDIR /app
 COPY install_build_env.sh ./
@@ -9,7 +9,7 @@ COPY . .
 RUN pnpm install --frozen-lockfile --offline
 RUN pnpm run build
 
-FROM node:16-alpine as production-stage
+FROM node:24-alpine as production-stage
 ARG DOPPLER_TOKEN
 WORKDIR /app
 
